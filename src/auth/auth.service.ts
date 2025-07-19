@@ -13,13 +13,15 @@ export class AuthService {
         const { userEmail, password, nickname } = signupDto;
 
         // Check if user already exists
-        const existingUser = await this.usersService.findByEmail(userEmail);
+        const existingUser = await this.usersService.findByEmail_signup(userEmail);
+        // SELECT * FROM users WHERE userEmail = 'userEmail'
         if (existingUser) {
             throw new ConflictException('User with this email already exists');
         }
 
         // Check if nickname is already taken
-        const existingNickname = await this.usersService.findByNickname(nickname);
+        const existingNickname = await this.usersService.findByNickname_signup(nickname);
+        // SELECT * FROM users WHERE nickname = 'nickname'  
         if (existingNickname) {
             throw new ConflictException('Nickname is already taken');
         }
