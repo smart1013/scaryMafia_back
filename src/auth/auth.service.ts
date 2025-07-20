@@ -48,7 +48,7 @@ export class AuthService {
         const { userEmail, password } = loginDto;
 
         // Find user by email
-        const user = await this.usersService.findByEmail(userEmail);
+        const user = await this.usersService.findByEmail_signup(userEmail);
         if (!user) {
             throw new UnauthorizedException('Invalid credentials');
         }

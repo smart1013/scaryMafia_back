@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './users.entity';
@@ -11,7 +11,12 @@ export class UsersService {
   ) {}
 
   async findAll(): Promise<User[]> {
-    return this.usersRepository.find();
+    return this.usersRepository.find({
+      select: ['userId', 'userEmail', 'nickname', 'created_at', 'img_url'],
+      order: {
+        created_at: 'DESC',
+      },
+    });
   }
 
   async findById(userId: string): Promise<User> {
@@ -31,19 +36,15 @@ export class UsersService {
 
 
   async findByEmail_signup(userEmail: string): Promise<User | null> {
-    const user = await this.usersRepository.findOne({ 
+    return await this.usersRepository.findOne({
       where: { userEmail },
-      select: ['userId', 'userEmail', 'nickname', 'created_at', 'img_url']
     });
-    return user;
   }
 
   async findByNickname_signup(nickname: string): Promise<User | null> {
-    const user = await this.usersRepository.findOne({ 
+    return await this.usersRepository.findOne({
       where: { nickname },
-      select: ['userId', 'userEmail', 'nickname', 'created_at', 'img_url']
     });
-    return user;
   }
 
   async findByEmail(userEmail: string): Promise<User | null> {
@@ -70,6 +71,32 @@ export class UsersService {
 
   async create(userData: Partial<User>): Promise<User> {
     const user = this.usersRepository.create(userData);
+    return this.usersRepository.save(user);
+  }
+
+  async update(userId: string, updateData: Partial<User>): Promise<User> {
+    const user = await this.usersRepository.findOne({ where: { userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    
+    // Check if email is being updated and if it's already taken
+    if (updateData.userEmail && updateData.userEmail !== user.userEmail) {
+      const existingUser = await this.findByEmail_signup(updateData.userEmail);
+      if (existingUser) {
+        throw new ConflictException('Email is already taken');
+      }
+    }
+    
+    // Check if nickname is being updated and if it's already taken
+    if (updateData.nickname && updateData.nickname !== user.nickname) {
+      const existingUser = await this.findByNickname_signup(updateData.nickname);
+      if (existingUser) {
+        throw new ConflictException('Nickname is already taken');
+      }
+    }
+    
+    Object.assign(user, updateData);
     return this.usersRepository.save(user);
   }
 }

@@ -10,14 +10,13 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: mafia
-      POSTGRES_HOST_AUTH_METHOD: trust
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - mafia_network
     restart: unless-stopped
     
-    # command: postgres -c 'host_based_authentication_method=trust'
+
 
   # redis:
   #   image: redis:7-alpine

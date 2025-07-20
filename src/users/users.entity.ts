@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { GameParticipant } from 'src/game-participants/game-participants.entity';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
 
 @Entity('users')
 export class User {
@@ -19,4 +20,7 @@ export class User {
 
   @Column({ type: 'text', nullable: true })
   img_url: string;
+
+  @OneToMany(() => GameParticipant, gameParticipant => gameParticipant.user)
+  gameParticipants: GameParticipant[];
 }
