@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { GamesModule } from './games/games.module';
 import { GameParticipantsModule } from './game-participants/game-participants.module';
+import { RoomModule } from './room/room.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { GameParticipantsModule } from './game-participants/game-participants.mo
     UsersModule,
     GamesModule,
     GameParticipantsModule,
+    RoomModule,
   ],
   controllers: [],
   providers: [],

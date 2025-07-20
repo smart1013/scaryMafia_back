@@ -1,4 +1,5 @@
 import { GameParticipant } from 'src/game-participants/game-participants.entity';
+import { Room } from 'src/room/room.entity';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
 
 @Entity('users')
@@ -23,4 +24,7 @@ export class User {
 
   @OneToMany(() => GameParticipant, gameParticipant => gameParticipant.user)
   gameParticipants: GameParticipant[];
+
+  @OneToMany(() => Room, room => room.hostUser)
+  hostedRooms: Room[];
 }

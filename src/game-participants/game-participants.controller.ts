@@ -27,19 +27,9 @@ export class GameParticipantsController {
         return this.gameParticipantsService.findOne(gameId, userId);
     }
 
-    @Put(':gameId/:userId')
-    update(@Param('gameId') gameId: string, @Param('userId') userId: string, @Body() updateDto: UpdateGameParticipantDto) {
-        return this.gameParticipantsService.update(gameId, userId, updateDto);
-    }
-
     @Delete(':gameId/:userId')
     remove(@Param('gameId') gameId: string, @Param('userId') userId: string) {
         return this.gameParticipantsService.remove(gameId, userId);
-    }
-
-    @Get('game/:gameId/roles')
-    getParticipantsByRole(@Param('gameId') gameId: string) {
-        return this.gameParticipantsService.getParticipantsByRole(gameId);
     }
 
     @Get('user/:userId/stats')

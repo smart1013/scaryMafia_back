@@ -24,8 +24,9 @@ CREATE TABLE rooms (
   roomId        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   host_user_id  UUID REFERENCES users(userId) ON DELETE SET NULL,
   status        TEXT CHECK (status IN ('waiting', 'in_progress', 'finished')) DEFAULT 'waiting',
+  title         TEXT,
+  notes         TEXT,
   created_at    TIMESTAMP DEFAULT now(),
-  gameId        UUID REFERENCES games(gameId) ON DELETE SET NULL
 );
 
 -- Game participants table

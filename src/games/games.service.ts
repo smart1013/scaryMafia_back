@@ -26,7 +26,16 @@ export class GamesService {
   async findOne(gameId: string): Promise<Game> {
     const game = await this.gamesRepository.findOne({
       where: { gameId },
-      relations: ['participants', 'participants.user']
+      relations: ['participants'],
+      select: {
+        gameId: true,
+        started_at: true,
+        ended_at: true,
+        winner_team: true,
+        participants: {
+          userId: true
+        }
+      }
     });
     
     if (!game) {
