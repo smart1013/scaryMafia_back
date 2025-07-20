@@ -1,0 +1,701 @@
+# Scary Mafia Backend API Documentation
+
+## Base URL
+```
+http://localhost:3000
+```
+
+## Authentication
+Currently, the API uses basic authentication without JWT tokens. All endpoints are publicly accessible.
+
+---
+
+## 1. Authentication Endpoints
+
+### 1.1 User Registration
+**POST** `/auth/signup`
+
+Register a new user account.
+
+**Request Body:**
+```json
+{
+  "userEmail": "user@example.com",
+  "password": "password123",
+  "nickname": "player1"
+}
+```
+
+**Validation Rules:**
+- `userEmail`: Must be a valid email address
+- `password`: Minimum 6 characters
+- `nickname`: Maximum 10 characters, must be unique
+
+**Response (200):**
+```json
+{
+  "message": "User created successfully",
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "userEmail": "user@example.com",
+  "nickname": "player1"
+}
+```
+
+**Error Responses:**
+- `409 Conflict`: Email or nickname already exists
+- `400 Bad Request`: Validation errors
+
+### 1.2 User Login
+**POST** `/auth/login`
+
+Authenticate user credentials.
+
+**Request Body:**
+```json
+{
+  "userEmail": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "Login successful",
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "userEmail": "user@example.com",
+  "nickname": "player1"
+}
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Invalid credentials
+
+---
+
+## 2. User Management Endpoints
+
+### 2.1 Get All Users
+**GET** `/users/list`
+
+Retrieve a list of all users.
+
+**Response (200):**
+```json
+[
+  {
+    "userId": "123e4567-e89b-12d3-a456-426614174000",
+    "userEmail": "user@example.com",
+    "nickname": "player1",
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "img_url": "https://example.com/avatar.jpg"
+  }
+]
+```
+
+### 2.2 Get User by ID
+**GET** `/users/userId/{userId}`
+
+Retrieve a specific user by their UUID.
+
+**Parameters:**
+- `userId` (string, required): User's UUID
+
+**Response (200):**
+```json
+{
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "userEmail": "user@example.com",
+  "nickname": "player1",
+  "created_at": "2024-01-01T00:00:00.000Z",
+  "img_url": "https://example.com/avatar.jpg"
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: User not found
+
+### 2.3 Get User by Nickname
+**GET** `/users/nickname/{nickname}`
+
+Retrieve a user by their nickname.
+
+**Parameters:**
+- `nickname` (string, required): User's nickname
+
+**Response (200):**
+```json
+{
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "userEmail": "user@example.com",
+  "nickname": "player1",
+  "created_at": "2024-01-01T00:00:00.000Z",
+  "img_url": "https://example.com/avatar.jpg"
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: User not found
+
+### 2.4 Get User by Email
+**GET** `/users/email/{email}`
+
+Retrieve a user by their email address.
+
+**Parameters:**
+- `email` (string, required): User's email address
+
+**Response (200):**
+```json
+{
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "userEmail": "user@example.com",
+  "nickname": "player1",
+  "created_at": "2024-01-01T00:00:00.000Z",
+  "img_url": "https://example.com/avatar.jpg"
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: User not found
+
+### 2.5 Get User Count
+**GET** `/users/count`
+
+Get the total number of registered users.
+
+**Response (200):**
+```json
+42
+```
+
+### 2.6 Update User
+**PUT** `/users/{userId}`
+
+Update user information.
+
+**Parameters:**
+- `userId` (string, required): User's UUID
+
+**Request Body:**
+```json
+{
+  "userEmail": "newemail@example.com",
+  "nickname": "newplayer",
+  "img_url": "https://example.com/new-avatar.jpg"
+}
+```
+
+**Validation Rules:**
+- `userEmail`: Must be a valid email address (optional)
+- `nickname`: Maximum 10 characters (optional)
+- `img_url`: URL string (optional)
+
+**Response (200):**
+```json
+{
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "userEmail": "newemail@example.com",
+  "nickname": "newplayer",
+  "created_at": "2024-01-01T00:00:00.000Z",
+  "img_url": "https://example.com/new-avatar.jpg"
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: User not found
+- `409 Conflict`: Email or nickname already taken
+
+---
+
+## 3. Room Management Endpoints
+
+### 3.1 Create Room
+**POST** `/rooms`
+
+Create a new game room.
+
+**Request Body:**
+```json
+{
+  "title": "Mafia Game Room",
+  "notes": "Welcome to the game!",
+  "hostUserId": "123e4567-e89b-12d3-a456-426614174000"
+}
+```
+
+**Validation Rules:**
+- `title`: String (optional)
+- `notes`: String (optional)
+- `hostUserId`: Valid UUID (optional)
+
+**Response (200):**
+```json
+{
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "title": "Mafia Game Room",
+  "notes": "Welcome to the game!",
+  "status": "waiting",
+  "created_at": "2024-01-01T00:00:00.000Z",
+  "hostUser": {
+    "userId": "123e4567-e89b-12d3-a456-426614174000",
+    "nickname": "player1"
+  }
+}
+```
+
+**Error Responses:**
+- `409 Conflict`: User is already hosting a room
+
+### 3.2 Update Room
+**PUT** `/rooms/{roomId}`
+
+Update room information.
+
+**Parameters:**
+- `roomId` (string, required): Room's UUID
+
+**Request Body:**
+```json
+{
+  "title": "Updated Room Title",
+  "notes": "Updated notes",
+  "status": "in_progress",
+  "hostUserId": "789e0123-e89b-12d3-a456-426614174000"
+}
+```
+
+**Validation Rules:**
+- `title`: String (optional)
+- `notes`: String (optional)
+- `status`: One of 'waiting', 'in_progress', 'finished' (optional)
+- `hostUserId`: Valid UUID (optional)
+
+**Response (200):**
+```json
+{
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "title": "Updated Room Title",
+  "notes": "Updated notes",
+  "status": "in_progress",
+  "created_at": "2024-01-01T00:00:00.000Z",
+  "hostUser": {
+    "userId": "789e0123-e89b-12d3-a456-426614174000",
+    "nickname": "player2"
+  }
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: Room not found
+- `409 Conflict`: User is already hosting a room
+
+### 3.3 Get Room
+**GET** `/rooms/{roomId}`
+
+Retrieve room information.
+
+**Parameters:**
+- `roomId` (string, required): Room's UUID
+
+**Response (200):**
+```json
+{
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "title": "Mafia Game Room",
+  "notes": "Welcome to the game!",
+  "status": "waiting",
+  "created_at": "2024-01-01T00:00:00.000Z",
+  "hostUser": {
+    "userId": "123e4567-e89b-12d3-a456-426614174000",
+    "nickname": "player1"
+  }
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: Room not found
+
+### 3.4 Delete Room
+**DELETE** `/rooms/{roomId}`
+
+Delete a room.
+
+**Parameters:**
+- `roomId` (string, required): Room's UUID
+
+**Response (200):**
+```json
+{
+  "message": "Room deleted successfully"
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: Room not found
+
+---
+
+## 4. Game Management Endpoints
+
+### 4.1 Create Game
+**POST** `/games`
+
+Create a new game session.
+
+**Request Body:**
+```json
+{
+  "started_at": "2024-01-01T10:00:00.000Z",
+  "ended_at": "2024-01-01T11:00:00.000Z",
+  "winner_team": "citizen"
+}
+```
+
+**Validation Rules:**
+- `started_at`: Valid date (required)
+- `ended_at`: Valid date (required)
+- `winner_team`: One of 'mafia', 'citizen', 'villain' (required)
+
+**Response (200):**
+```json
+{
+  "gameId": "789e0123-e89b-12d3-a456-426614174000",
+  "started_at": "2024-01-01T10:00:00.000Z",
+  "ended_at": "2024-01-01T11:00:00.000Z",
+  "winner_team": "citizen"
+}
+```
+
+### 4.2 Get All Games
+**GET** `/games/list`
+
+Retrieve a list of all games.
+
+**Response (200):**
+```json
+[
+  {
+    "gameId": "789e0123-e89b-12d3-a456-426614174000",
+    "started_at": "2024-01-01T10:00:00.000Z",
+    "ended_at": "2024-01-01T11:00:00.000Z",
+    "winner_team": "citizen",
+    "participants": []
+  }
+]
+```
+
+### 4.3 Get Game Count
+**GET** `/games/count`
+
+Get the total number of games.
+
+**Response (200):**
+```json
+15
+```
+
+### 4.4 Get Game by ID
+**GET** `/games/{gameId}`
+
+Retrieve a specific game by its UUID.
+
+**Parameters:**
+- `gameId` (string, required): Game's UUID
+
+**Response (200):**
+```json
+{
+  "gameId": "789e0123-e89b-12d3-a456-426614174000",
+  "started_at": "2024-01-01T10:00:00.000Z",
+  "ended_at": "2024-01-01T11:00:00.000Z",
+  "winner_team": "citizen",
+  "participants": [
+    {
+      "userId": "123e4567-e89b-12d3-a456-426614174000"
+    }
+  ]
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: Game not found
+
+---
+
+## 5. Game Participants Endpoints
+
+### 5.1 Create Game Participant
+**POST** `/game-participants`
+
+Add a participant to a game.
+
+**Request Body:**
+```json
+{
+  "gameId": "789e0123-e89b-12d3-a456-426614174000",
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "role": "citizen",
+  "isWinner": true
+}
+```
+
+**Validation Rules:**
+- `gameId`: Valid UUID (required)
+- `userId`: Valid UUID (required)
+- `role`: One of 'mafia', 'citizen', 'villain' (required)
+- `isWinner`: Boolean (required)
+
+**Response (200):**
+```json
+{
+  "gameId": "789e0123-e89b-12d3-a456-426614174000",
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "role": "citizen",
+  "isWinner": true
+}
+```
+
+### 5.2 Get Participants by Game
+**GET** `/game-participants/game/{gameId}`
+
+Retrieve all participants of a specific game.
+
+**Parameters:**
+- `gameId` (string, required): Game's UUID
+
+**Response (200):**
+```json
+[
+  {
+    "gameId": "789e0123-e89b-12d3-a456-426614174000",
+    "userId": "123e4567-e89b-12d3-a456-426614174000",
+    "role": "citizen",
+    "isWinner": true,
+    "user": {
+      "userId": "123e4567-e89b-12d3-a456-426614174000",
+      "nickname": "player1"
+    }
+  }
+]
+```
+
+### 5.3 Get Participant Games by User
+**GET** `/game-participants/user/{userId}`
+
+Retrieve all games a user has participated in.
+
+**Parameters:**
+- `userId` (string, required): User's UUID
+
+**Response (200):**
+```json
+[
+  {
+    "gameId": "789e0123-e89b-12d3-a456-426614174000",
+    "userId": "123e4567-e89b-12d3-a456-426614174000",
+    "role": "citizen",
+    "isWinner": true,
+    "game": {
+      "gameId": "789e0123-e89b-12d3-a456-426614174000",
+      "started_at": "2024-01-01T10:00:00.000Z",
+      "ended_at": "2024-01-01T11:00:00.000Z",
+      "winner_team": "citizen"
+    }
+  }
+]
+```
+
+### 5.4 Get Specific Participant
+**GET** `/game-participants/{gameId}/{userId}`
+
+Retrieve a specific participant in a game.
+
+**Parameters:**
+- `gameId` (string, required): Game's UUID
+- `userId` (string, required): User's UUID
+
+**Response (200):**
+```json
+{
+  "gameId": "789e0123-e89b-12d3-a456-426614174000",
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "role": "citizen",
+  "isWinner": true,
+  "user": {
+    "userId": "123e4567-e89b-12d3-a456-426614174000",
+    "nickname": "player1"
+  },
+  "game": {
+    "gameId": "789e0123-e89b-12d3-a456-426614174000",
+    "started_at": "2024-01-01T10:00:00.000Z",
+    "ended_at": "2024-01-01T11:00:00.000Z",
+    "winner_team": "citizen"
+  }
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: Participant not found
+
+### 5.5 Remove Participant
+**DELETE** `/game-participants/{gameId}/{userId}`
+
+Remove a participant from a game.
+
+**Parameters:**
+- `gameId` (string, required): Game's UUID
+- `userId` (string, required): User's UUID
+
+**Response (200):**
+```json
+{
+  "message": "Participant removed successfully"
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: Participant not found
+
+### 5.6 Get User Statistics
+**GET** `/game-participants/user/{userId}/stats`
+
+Get statistics for a specific user.
+
+**Parameters:**
+- `userId` (string, required): User's UUID
+
+**Response (200):**
+```json
+{
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "totalGames": 10,
+  "wins": 6,
+  "losses": 4,
+  "winRate": 0.6,
+  "roleStats": {
+    "mafia": { "games": 3, "wins": 2 },
+    "citizen": { "games": 5, "wins": 3 },
+    "villain": { "games": 2, "wins": 1 }
+  }
+}
+```
+
+### 5.7 Get Game Winners
+**GET** `/game-participants/game/{gameId}/winners`
+
+Get all winners of a specific game.
+
+**Parameters:**
+- `gameId` (string, required): Game's UUID
+
+**Response (200):**
+```json
+[
+  {
+    "gameId": "789e0123-e89b-12d3-a456-426614174000",
+    "userId": "123e4567-e89b-12d3-a456-426614174000",
+    "role": "citizen",
+    "isWinner": true,
+    "user": {
+      "userId": "123e4567-e89b-12d3-a456-426614174000",
+      "nickname": "player1"
+    }
+  }
+]
+```
+
+---
+
+## Data Models
+
+### User
+```json
+{
+  "userId": "string (UUID)",
+  "userEmail": "string (email)",
+  "password_hash": "string (hashed)",
+  "nickname": "string (max 10 chars)",
+  "img_url": "string (optional)",
+  "created_at": "Date"
+}
+```
+
+### Room
+```json
+{
+  "roomId": "string (UUID)",
+  "hostUser": "User (optional)",
+  "status": "enum: 'waiting' | 'in_progress' | 'finished'",
+  "title": "string (optional)",
+  "notes": "string (optional)",
+  "created_at": "Date"
+}
+```
+
+### Game
+```json
+{
+  "gameId": "string (UUID)",
+  "started_at": "Date",
+  "ended_at": "Date",
+  "winner_team": "enum: 'mafia' | 'citizen' | 'villain'"
+}
+```
+
+### GameParticipant
+```json
+{
+  "gameId": "string (UUID)",
+  "userId": "string (UUID)",
+  "role": "enum: 'mafia' | 'citizen' | 'villain'",
+  "isWinner": "boolean"
+}
+```
+
+---
+
+## Error Responses
+
+### Standard Error Format
+```json
+{
+  "statusCode": 400,
+  "message": "Error description",
+  "error": "Bad Request"
+}
+```
+
+### Common HTTP Status Codes
+- `200 OK`: Request successful
+- `201 Created`: Resource created successfully
+- `400 Bad Request`: Invalid request data
+- `401 Unauthorized`: Authentication required
+- `404 Not Found`: Resource not found
+- `409 Conflict`: Resource conflict (e.g., duplicate email)
+- `500 Internal Server Error`: Server error
+
+---
+
+## Rate Limiting
+Currently, no rate limiting is implemented.
+
+## CORS
+CORS is enabled for all origins in development mode.
+
+## Database
+The application uses PostgreSQL with TypeORM for data persistence.
+
+## Environment Variables
+```env
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=password
+DB_DATABASE=mafia
+
+# Application
+PORT=3000
+NODE_ENV=development
+``` 

@@ -70,6 +70,12 @@ export class RoomService {
     return this.mapToResponseDto(room);
   }
 
+  async remove(roomId: string): Promise<{ message: string }> {
+    const room = await this.findOne(roomId);
+    await this.roomRepository.remove(room);
+    return { message: 'Room deleted successfully' };
+  }
+
   private async checkUserRoomConstraint(userId: string): Promise<void> {
     const existingRoom = await this.roomRepository.findOne({
       where: { hostUser: { userId } },

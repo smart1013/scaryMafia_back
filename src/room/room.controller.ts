@@ -1,4 +1,4 @@
-import { Controller, Post, Put, Get, Body, Param } from '@nestjs/common';
+import { Controller, Post, Put, Get, Body, Param, Delete } from '@nestjs/common';
 import { RoomService } from './room.service';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
@@ -24,5 +24,10 @@ export class RoomController {
   @Get(':roomId')
   async findOne(@Param('roomId') roomId: string): Promise<RoomResponseDto> {
     return this.roomService.findOneResponse(roomId);
+  }
+
+  @Delete(':roomId')
+  async remove(@Param('roomId') roomId: string): Promise<{ message: string }> {
+    return this.roomService.remove(roomId);
   }
 }
