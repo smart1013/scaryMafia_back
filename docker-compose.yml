@@ -15,6 +15,8 @@ services:
     networks:
       - mafia_network
     restart: unless-stopped
+    
+
 
   redis:
     image: redis:7-alpine
@@ -27,25 +29,25 @@ services:
       - mafia_network
     restart: unless-stopped
 
-  backend:
-    build: .
-    container_name: mafia_backend
-    ports:
-      - "8000:8000"
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USERNAME: postgres
-      DB_PASSWORD: password
-      DB_DATABASE: mafia
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - mafia_network
-    restart: unless-stopped
+  # backend:doc
+  #   build: .
+  #   container_name: mafia_backend
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_USERNAME: postgres
+  #     DB_PASSWORD: password
+  #     DB_NAME: mafia
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   networks:
+  #     - mafia_network
+  #   restart: unless-stopped
 
 volumes:
   postgres_data:
