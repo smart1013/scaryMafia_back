@@ -23,7 +23,7 @@ export class RoomService {
       }
     }
 
-    // Check if user is already in another room
+    // Check if user is already in another room (either as host or participant)
     if (createRoomDto.hostUserId) {
       await this.checkUserRoomConstraint(createRoomDto.hostUserId);
     }
@@ -92,13 +92,20 @@ export class RoomService {
   }
 
   private async checkUserRoomConstraint(userId: string): Promise<void> {
-    const existingRoom = await this.roomRepository.findOne({
+    // Check if user is hosting another room (database check)
+    const existingHostedRoom = await this.roomRepository.findOne({
       where: { hostUser: { userId } },
       relations: ['hostUser'],
     });
     
-    if (existingRoom) {
-      throw new ConflictException(`User is already hosting a room (Room ID: ${existingRoom.roomId})`);
+    if (existingHostedRoom) {
+      throw new ConflictException(`User is already hosting a room (Room ID: ${existingHostedRoom.roomId})`);
+    }
+
+    // Check if user is participating in another room (Redis check)
+    const currentRoomId = await this.redisService.getUserCurrentRoom(userId);
+    if (currentRoomId) {
+      throw new ConflictException(`User is already in another room (Room ID: ${currentRoomId}). Please leave the current room before creating a new one.`);
     }
   }
 
@@ -350,6 +357,16 @@ export class RoomService {
       message: 'User removed from room successfully',
       roomId: currentRoom
     };
+  }
+
+  async findAllWaitingRooms(): Promise<RoomResponseDto[]> {
+    const waitingRooms = await this.roomRepository.find({
+      where: { status: 'waiting' },
+      relations: ['hostUser'],
+      order: { created_at: 'DESC' } // Most recent first
+    });
+    
+    return waitingRooms.map(room => this.mapToResponseDto(room));
   }
 
 }

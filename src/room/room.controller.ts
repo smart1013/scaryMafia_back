@@ -23,6 +23,29 @@ export class RoomController {
     return this.roomService.update(roomId, updateRoomDto);
   }
 
+  @Get('waiting')
+  async findAllWaitingRooms(): Promise<RoomResponseDto[]> {
+    return this.roomService.findAllWaitingRooms();
+  }
+
+  @Get('current/:userId')
+  async getUserCurrentRoom(@Param('userId') userId: string) {
+    try {
+      return await this.roomService.getUserCurrentRoom(userId);
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  @Post('leave-current')
+  async leaveCurrentRoom(@Body() leaveRoomDto: LeaveRoomDto) {
+    try {
+      return await this.roomService.removeUserFromCurrentRoom(leaveRoomDto.userId);
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
   @Get(':roomId')
   async findOne(@Param('roomId') roomId: string): Promise<RoomResponseDto> {
     return this.roomService.findOneResponse(roomId);
@@ -64,24 +87,6 @@ export class RoomController {
   async getRoomParticipants(@Param('roomId') roomId: string) {
     try {
       return await this.roomService.getRoomParticipants(roomId);
-    } catch (error) {
-      throw new BadRequestException(error.message);
-    }
-  }
-
-  @Get('current/:userId')
-  async getUserCurrentRoom(@Param('userId') userId: string) {
-    try {
-      return await this.roomService.getUserCurrentRoom(userId);
-    } catch (error) {
-      throw new BadRequestException(error.message);
-    }
-  }
-
-  @Post('leave-current')
-  async leaveCurrentRoom(@Body() leaveRoomDto: LeaveRoomDto) {
-    try {
-      return await this.roomService.removeUserFromCurrentRoom(leaveRoomDto.userId);
     } catch (error) {
       throw new BadRequestException(error.message);
     }

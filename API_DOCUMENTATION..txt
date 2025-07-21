@@ -2,11 +2,17 @@
 
 ## Base URL
 ```
-http://localhost:3000
+http://localhost:8000
 ```
 
 ## Authentication
 Currently, the API uses basic authentication without JWT tokens. All endpoints are publicly accessible.
+
+## Redis Integration
+The application uses Redis for real-time participant tracking and session management. All room participant operations are handled through Redis for optimal performance.
+
+## Auto-Start Game Feature
+Rooms automatically start when the required number of players is reached. The host can specify the required player count (6-12) when creating a room.
 
 ---
 
@@ -213,14 +219,15 @@ Update user information.
 ### 3.1 Create Room
 **POST** `/rooms`
 
-Create a new game room.
+Create a new game room with auto-start functionality.
 
 **Request Body:**
 ```json
 {
   "title": "Mafia Game Room",
   "notes": "Welcome to the game!",
-  "hostUserId": "123e4567-e89b-12d3-a456-426614174000"
+  "hostUserId": "123e4567-e89b-12d3-a456-426614174000",
+  "requiredPlayers": 8
 }
 ```
 
@@ -228,6 +235,7 @@ Create a new game room.
 - `title`: String (optional)
 - `notes`: String (optional)
 - `hostUserId`: Valid UUID (optional)
+- `requiredPlayers`: Integer between 6-12 (optional, defaults to 8)
 
 **Response (200):**
 ```json
@@ -237,6 +245,7 @@ Create a new game room.
   "notes": "Welcome to the game!",
   "status": "waiting",
   "created_at": "2024-01-01T00:00:00.000Z",
+  "requiredPlayers": 8,
   "hostUser": {
     "userId": "123e4567-e89b-12d3-a456-426614174000",
     "nickname": "player1"
@@ -279,6 +288,7 @@ Update room information.
   "notes": "Updated notes",
   "status": "in_progress",
   "created_at": "2024-01-01T00:00:00.000Z",
+  "requiredPlayers": 8,
   "hostUser": {
     "userId": "789e0123-e89b-12d3-a456-426614174000",
     "nickname": "player2"
@@ -306,6 +316,7 @@ Retrieve room information.
   "notes": "Welcome to the game!",
   "status": "waiting",
   "created_at": "2024-01-01T00:00:00.000Z",
+  "requiredPlayers": 8,
   "hostUser": {
     "userId": "123e4567-e89b-12d3-a456-426614174000",
     "nickname": "player1"
@@ -334,11 +345,312 @@ Delete a room.
 **Error Responses:**
 - `404 Not Found`: Room not found
 
+### 3.5 Join Room
+**POST** `/rooms/{roomId}/join`
+
+Join a room. Automatically checks if game should start when required players are reached.
+
+**Parameters:**
+- `roomId` (string, required): Room's UUID
+
+**Request Body:**
+```json
+{
+  "userId": "123e4567-e89b-12d3-a456-426614174000"
+}
+```
+
+**Validation Rules:**
+- `userId`: Valid UUID (required)
+
+**Response (200) - Successfully Joined:**
+```json
+{
+  "message": "Successfully joined room",
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "gameStarted": false,
+  "waitingMessage": "Waiting for 2 more players to start."
+}
+```
+
+**Response (200) - Game Auto-Started:**
+```json
+{
+  "message": "Game started! 8 players joined.",
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "gameStarted": true,
+  "waitingMessage": "Game started! 8 players joined."
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: Room not found
+- `409 Conflict`: Room is full (maximum 12 players)
+- `409 Conflict`: Cannot join room - game is already in progress or finished
+- `409 Conflict`: User is already in this room
+
+### 3.6 Leave Room
+**POST** `/rooms/{roomId}/leave`
+
+Leave a room. If user is the host and leaves, a new host is assigned automatically.
+
+**Parameters:**
+- `roomId` (string, required): Room's UUID
+
+**Request Body:**
+```json
+{
+  "userId": "123e4567-e89b-12d3-a456-426614174000"
+}
+```
+
+**Validation Rules:**
+- `userId`: Valid UUID (required)
+
+**Response (200):**
+```json
+{
+  "message": "Successfully left room",
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "roomDeleted": false
+}
+```
+
+**Response (200) - Room Deleted (No Participants Left):**
+```json
+{
+  "message": "Successfully left room. Room deleted as no participants remain.",
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "roomDeleted": true
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: Room not found
+- `404 Not Found`: User is not in this room
+
+### 3.7 Get Room Participants
+**GET** `/rooms/{roomId}/participants`
+
+Get all participants in a room with real-time count and game start status.
+
+**Parameters:**
+- `roomId` (string, required): Room's UUID
+
+**Response (200):**
+```json
+{
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "participants": [
+    "123e4567-e89b-12d3-a456-426614174000",
+    "789e0123-e89b-12d3-a456-426614174000",
+    "abc12345-e89b-12d3-a456-426614174000"
+  ],
+  "count": 3,
+  "requiredPlayers": 8,
+  "canStartGame": false,
+  "reason": "Need at least 8 players to start. Current: 3"
+}
+```
+
+**Response (200) - Can Start Game:**
+```json
+{
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "participants": [
+    "123e4567-e89b-12d3-a456-426614174000",
+    "789e0123-e89b-12d3-a456-426614174000",
+    "abc12345-e89b-12d3-a456-426614174000",
+    "def67890-e89b-12d3-a456-426614174000",
+    "ghi11111-e89b-12d3-a456-426614174000",
+    "jkl22222-e89b-12d3-a456-426614174000",
+    "mno33333-e89b-12d3-a456-426614174000",
+    "pqr44444-e89b-12d3-a456-426614174000"
+  ],
+  "count": 8,
+  "requiredPlayers": 8,
+  "canStartGame": true
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: Room not found
+
+### 3.8 Get User's Current Room
+**GET** `/rooms/current/{userId}`
+
+Get information about the room a user is currently in.
+
+**Parameters:**
+- `userId` (string, required): User's UUID
+
+**Response (200) - User in Room:**
+```json
+{
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "roomInfo": {
+    "title": "Mafia Game Room",
+    "status": "waiting",
+    "participantCount": 5,
+    "isHost": true
+  }
+}
+```
+
+**Response (200) - User Not in Any Room:**
+```json
+{
+  "roomId": null
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid user ID
+
+### 3.9 Leave Current Room
+**POST** `/rooms/leave-current`
+
+Leave whatever room the user is currently in (convenience endpoint).
+
+**Request Body:**
+```json
+{
+  "userId": "123e4567-e89b-12d3-a456-426614174000"
+}
+```
+
+**Validation Rules:**
+- `userId`: Valid UUID (required)
+
+**Response (200) - Successfully Left:**
+```json
+{
+  "message": "User removed from room successfully",
+  "roomId": "456e7890-e89b-12d3-a456-426614174000"
+}
+```
+
+**Response (200) - User Not in Any Room:**
+```json
+{
+  "message": "User is not in any room"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Invalid user ID
+
+### 3.10 Check if Game Can Start
+**GET** `/rooms/{roomId}/can-start`
+
+Check if a game can start based on current participants and room requirements.
+
+**Parameters:**
+- `roomId` (string, required): Room's UUID
+
+**Response (200) - Cannot Start:**
+```json
+{
+  "canStart": false,
+  "reason": "Need at least 8 players to start. Current: 5"
+}
+```
+
+**Response (200) - Can Start:**
+```json
+{
+  "canStart": true
+}
+```
+
+**Error Responses:**
+- `404 Not Found`: Room not found
+
 ---
 
-## 4. Game Management Endpoints
+## 4. Redis Management Endpoints
 
-### 4.1 Create Game
+### 4.1 Test Redis Connection
+**GET** `/redis/test`
+
+Test if Redis is connected and working properly.
+
+**Response (200) - Connected:**
+```json
+{
+  "success": true,
+  "message": "Redis is connected!",
+  "timestamp": "2024-01-01T10:00:00.000Z"
+}
+```
+
+**Response (200) - Not Connected:**
+```json
+{
+  "success": false,
+  "message": "Redis connection failed",
+  "timestamp": "2024-01-01T10:00:00.000Z"
+}
+```
+
+### 4.2 Get Redis Status
+**GET** `/redis/status`
+
+Get detailed Redis connection status and server information.
+
+**Response (200) - Connected:**
+```json
+{
+  "connected": true,
+  "status": "connected",
+  "info": {
+    "ping": "PONG",
+    "serverInfo": "Redis server info..."
+  }
+}
+```
+
+**Response (200) - Disconnected:**
+```json
+{
+  "connected": false,
+  "status": "disconnected",
+  "info": {
+    "error": "Connection refused"
+  }
+}
+```
+
+### 4.3 Redis Ping
+**GET** `/redis/ping`
+
+Simple Redis ping test.
+
+**Response (200) - Connected:**
+```json
+{
+  "pong": true,
+  "timestamp": "2024-01-01T10:00:00.000Z"
+}
+```
+
+**Response (200) - Not Connected:**
+```json
+{
+  "pong": false,
+  "timestamp": "2024-01-01T10:00:00.000Z"
+}
+```
+
+---
+
+## 5. Game Management Endpoints
+
+### 5.1 Create Game
 **POST** `/games`
 
 Create a new game session.
@@ -367,7 +679,7 @@ Create a new game session.
 }
 ```
 
-### 4.2 Get All Games
+### 5.2 Get All Games
 **GET** `/games/list`
 
 Retrieve a list of all games.
@@ -385,7 +697,7 @@ Retrieve a list of all games.
 ]
 ```
 
-### 4.3 Get Game Count
+### 5.3 Get Game Count
 **GET** `/games/count`
 
 Get the total number of games.
@@ -395,7 +707,7 @@ Get the total number of games.
 15
 ```
 
-### 4.4 Get Game by ID
+### 5.4 Get Game by ID
 **GET** `/games/{gameId}`
 
 Retrieve a specific game by its UUID.
@@ -423,9 +735,9 @@ Retrieve a specific game by its UUID.
 
 ---
 
-## 5. Game Participants Endpoints
+## 6. Game Participants Endpoints
 
-### 5.1 Create Game Participant
+### 6.1 Create Game Participant
 **POST** `/game-participants`
 
 Add a participant to a game.
@@ -456,7 +768,7 @@ Add a participant to a game.
 }
 ```
 
-### 5.2 Get Participants by Game
+### 6.2 Get Participants by Game
 **GET** `/game-participants/game/{gameId}`
 
 Retrieve all participants of a specific game.
@@ -480,7 +792,7 @@ Retrieve all participants of a specific game.
 ]
 ```
 
-### 5.3 Get Participant Games by User
+### 6.3 Get Participant Games by User
 **GET** `/game-participants/user/{userId}`
 
 Retrieve all games a user has participated in.
@@ -506,7 +818,7 @@ Retrieve all games a user has participated in.
 ]
 ```
 
-### 5.4 Get Specific Participant
+### 6.4 Get Specific Participant
 **GET** `/game-participants/{gameId}/{userId}`
 
 Retrieve a specific participant in a game.
@@ -538,7 +850,7 @@ Retrieve a specific participant in a game.
 **Error Responses:**
 - `404 Not Found`: Participant not found
 
-### 5.5 Remove Participant
+### 6.5 Remove Participant
 **DELETE** `/game-participants/{gameId}/{userId}`
 
 Remove a participant from a game.
@@ -557,7 +869,7 @@ Remove a participant from a game.
 **Error Responses:**
 - `404 Not Found`: Participant not found
 
-### 5.6 Get User Statistics
+### 6.6 Get User Statistics
 **GET** `/game-participants/user/{userId}/stats`
 
 Get statistics for a specific user.
@@ -581,7 +893,7 @@ Get statistics for a specific user.
 }
 ```
 
-### 5.7 Get Game Winners
+### 6.7 Get Game Winners
 **GET** `/game-participants/game/{gameId}/winners`
 
 Get all winners of a specific game.
@@ -629,6 +941,7 @@ Get all winners of a specific game.
   "status": "enum: 'waiting' | 'in_progress' | 'finished'",
   "title": "string (optional)",
   "notes": "string (optional)",
+  "requiredPlayers": "number (6-12, default: 8)",
   "created_at": "Date"
 }
 ```
@@ -686,6 +999,48 @@ CORS is enabled for all origins in development mode.
 ## Database
 The application uses PostgreSQL with TypeORM for data persistence.
 
+## Auto-Start Game Logic
+
+### How It Works
+1. **Room Creation**: Host specifies required player count (6-12, default: 8)
+2. **Player Joining**: When a player joins, system checks current participant count
+3. **Auto-Start Trigger**: If current count >= required count, game starts automatically
+4. **Status Update**: Room status changes from 'waiting' to 'in_progress'
+5. **User Notification**: All participants receive game start notification
+
+### Auto-Start Conditions
+- Room must be in 'waiting' status
+- Current participant count must equal or exceed required player count
+- All participants must be valid users
+
+### Game Start Process
+1. Update room status to 'in_progress'
+2. Log game start event
+3. Return success response with game start message
+4. (Future) Assign roles, initialize game phases, send notifications
+
+## Redis Data Structures
+
+### Room Participants
+- **Key**: `room:participants:{roomId}`
+- **Type**: Set
+- **Value**: Set of user IDs in the room
+- **TTL**: None (persistent until room is deleted)
+
+### User Current Room
+- **Key**: `user:current_room:{userId}`
+- **Type**: String
+- **Value**: Room ID where user is currently located
+- **TTL**: None (persistent until user leaves room)
+
+### Game State Cache
+- **Key**: `game:state:{gameId}`
+- **Type**: Hash
+- **Value**: Game state information
+- **TTL**: Game duration + 1 hour
+
+---
+
 ## Environment Variables
 ```env
 # Database
@@ -695,7 +1050,13 @@ DB_USERNAME=postgres
 DB_PASSWORD=password
 DB_DATABASE=mafia
 
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DB=0
+
 # Application
-PORT=3000
+PORT=8000
 NODE_ENV=development
 ``` 
