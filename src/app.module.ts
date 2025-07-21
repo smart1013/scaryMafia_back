@@ -6,6 +6,7 @@ import { UsersModule } from './users/users.module';
 import { GamesModule } from './games/games.module';
 import { GameParticipantsModule } from './game-participants/game-participants.module';
 import { RoomModule } from './room/room.module';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { RoomModule } from './room/room.module';
     GamesModule,
     GameParticipantsModule,
     RoomModule,
+    RedisModule,
   ],
   controllers: [],
   providers: [],

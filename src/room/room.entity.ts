@@ -22,4 +22,7 @@ export class Room {
   @CreateDateColumn()
   created_at: Date;
 
+  @Column({ type: 'int', default: 8 })
+  requiredPlayers: number;
+
 }

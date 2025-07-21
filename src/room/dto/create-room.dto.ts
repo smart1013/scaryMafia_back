@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsOptional, IsString, IsUUID, IsInt, Min, Max } from 'class-validator';
 
 export class CreateRoomDto {
   @IsString()
@@ -10,4 +10,9 @@ export class CreateRoomDto {
 
   @IsUUID()
   hostUserId?: string;
+
+  @IsInt()
+  @Min(8)
+  @Max(12)
+  requiredPlayers?: number;
 }
