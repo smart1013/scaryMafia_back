@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { RedisService } from '../redis/redis.service';
 import { RoleAssignmentService } from './services/role-assignment.service';
 import { GameState, GameSettings } from './interfaces/game-state.interface';
@@ -7,6 +7,7 @@ import { RoleType } from '../common/enums/role-type.enum';
 import { PlayerStateResponseDto } from './dto/player-state-response.dto';
 import { NightActionResponseDto } from './dto/night-action-response.dto';
 import { PoliceInvestigationResponseDto } from './dto/police-investigation-response.dto';
+import { VoteResponseDto } from './dto/vote-response.dto';
 
 @Injectable()
 export class GameLogicService {
@@ -30,7 +31,7 @@ export class GameLogicService {
     const gameState: GameState = {
       roomId,
       phase: GamePhase.STARTING,
-      dayNumber: 1,
+      dayNumber: 0,
       players,
       eliminatedPlayers: [],
       voteResults: {},
@@ -164,6 +165,9 @@ export class GameLogicService {
     gameState.phase = GamePhase.VOTE;
     gameState.voteResults = {};
 
+    // Clear any previous votes for this day
+    await this.redisService.clearGameVotes(roomId, gameState.dayNumber);
+
     await this.updateGameState(roomId, gameState);
     return gameState;
   }
@@ -175,16 +179,26 @@ export class GameLogicService {
     const gameState = await this.getGameState(roomId);
     if (!gameState) throw new Error('Game state not found');
 
+    // Get votes from Redis
+    const votes = await this.redisService.getAllVotes(roomId, gameState.dayNumber);
+    
+    // Count votes for each target
+    const voteCounts: Record<string, number> = {};
+    for (const targetUserId of Object.values(votes)) {
+      voteCounts[targetUserId] = (voteCounts[targetUserId] || 0) + 1;
+    }
+
     // Process votes (eliminate player with most votes)
-    if (gameState.voteResults && Object.keys(gameState.voteResults).length > 0) {
-      // Find userId with max votes
-      const maxVotes = Math.max(...Object.values(gameState.voteResults));
-      const votedOut = Object.entries(gameState.voteResults)
+    if (Object.keys(voteCounts).length > 0) {
+      const maxVotes = Math.max(...Object.values(voteCounts));
+      const votedOut = Object.entries(voteCounts)
         .filter(([_, count]) => count === maxVotes)
         .map(([userId]) => userId);
+      
       // If tie, randomly pick one
       const eliminatedId = votedOut[Math.floor(Math.random() * votedOut.length)];
       const eliminatedPlayer = gameState.players.find(p => p.userId === eliminatedId);
+      
       if (eliminatedPlayer && eliminatedPlayer.isAlive) {
         eliminatedPlayer.isAlive = false;
         gameState.eliminatedPlayers.push(eliminatedPlayer.userId);
@@ -200,6 +214,9 @@ export class GameLogicService {
     }
 
     gameState.phase = GamePhase.DAY_RESULT;
+    
+    // Clear votes after processing
+    await this.redisService.clearGameVotes(roomId, gameState.dayNumber);
 
     await this.updateGameState(roomId, gameState);
     await this.checkWinConditions(roomId);
@@ -465,6 +482,116 @@ export class GameLogicService {
       roomId,
       dayNumber: gameState.dayNumber,
       investigationResults: resultsWithNicknames
+    };
+  }
+
+  async submitVote(roomId: string, userId: string, targetUserId: string): Promise<VoteResponseDto> {
+  const gameState = await this.getGameState(roomId);
+  if (!gameState) {
+    throw new BadRequestException('Game state not found');
+  }
+
+  // Validate game phase
+  if (gameState.phase !== GamePhase.VOTE) {
+    throw new BadRequestException('Voting can only be done during vote phase');
+  }
+
+  // Validate player
+  const player = gameState.players.find(p => p.userId === userId);
+  if (!player || !player.isAlive) {
+    throw new BadRequestException('Player not found or not alive');
+  }
+
+  // Check if player has already voted
+  const existingVote = await this.redisService.getPlayerVote(roomId, gameState.dayNumber, userId);
+  if (existingVote) {
+    const previousTarget = gameState.players.find(p => p.userId === existingVote);
+    throw new BadRequestException(`${player.nickname} has already voted to eliminate ${previousTarget?.nickname || 'someone'}. You cannot vote again.`);
+  }
+
+  // Prevent self-voting
+  if (userId === targetUserId) {
+    throw new BadRequestException(`${player.nickname} cannot vote to eliminate themselves.`);
+  }
+
+  // Validate target
+  const targetPlayer = gameState.players.find(p => p.userId === targetUserId);
+  if (!targetPlayer || !targetPlayer.isAlive) {
+    throw new BadRequestException('Target player not found or not alive');
+  }
+
+  // Store vote in Redis
+  await this.redisService.setPlayerVote(roomId, gameState.dayNumber, userId, targetUserId);
+
+  // Check if all alive players have voted
+  const alivePlayers = gameState.players.filter(p => p.isAlive);
+  const allVotesComplete = await this.redisService.checkVoteCompletion(
+    roomId, 
+    gameState.dayNumber, 
+    alivePlayers.map(p => p.userId)
+  );
+
+  return {
+    success: true,
+    message: `${player.nickname} voted to eliminate ${targetPlayer.nickname}`,
+    voteCount: alivePlayers.length,
+    allVotesComplete
+  };
+}
+
+  async getVoteStatus(roomId: string) {
+    const gameState = await this.getGameState(roomId);
+    if (!gameState) {
+      throw new Error('Game state not found');
+    }
+
+    const votes = await this.redisService.getAllVotes(roomId, gameState.dayNumber);
+    
+    // Count votes for each target
+    const voteCounts: Record<string, number> = {};
+    for (const targetUserId of Object.values(votes)) {
+      voteCounts[targetUserId] = (voteCounts[targetUserId] || 0) + 1;
+    }
+
+    // Find players with most votes
+    const maxVotes = Math.max(...Object.values(voteCounts), 0);
+    const topTargets = Object.entries(voteCounts)
+      .filter(([_, count]) => count === maxVotes)
+      .map(([userId]) => userId);
+
+    return {
+      roomId,
+      dayNumber: gameState.dayNumber,
+      votes,
+      voteCounts,
+      topTargets,
+      maxVotes,
+      tie: topTargets.length > 1
+    };
+  }
+
+  async getVoteCompletion(roomId: string) {
+    const gameState = await this.getGameState(roomId);
+    if (!gameState) {
+      throw new Error('Game state not found');
+    }
+
+    const alivePlayers = gameState.players.filter(p => p.isAlive);
+    const votes = await this.redisService.getAllVotes(roomId, gameState.dayNumber);
+    
+    const votedPlayers = Object.keys(votes);
+    const remainingPlayers = alivePlayers.filter(p => !votedPlayers.includes(p.userId));
+
+    return {
+      roomId,
+      dayNumber: gameState.dayNumber,
+      totalAlivePlayers: alivePlayers.length,
+      votedPlayers: votedPlayers.length,
+      remainingPlayers: remainingPlayers.map(p => ({
+        userId: p.userId,
+        nickname: p.nickname
+      })),
+      allVotesComplete: votedPlayers.length === alivePlayers.length
     };
   }
 }

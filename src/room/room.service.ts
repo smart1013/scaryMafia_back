@@ -345,12 +345,12 @@ export class RoomService {
     }
     
     // Check room status
-    if (room.status !== 'waiting') {
-      return { 
-        canStart: false, 
-        reason: `Room is not in waiting status. Current status: ${room.status}` 
-      };
-    }
+    // if (room.status !== 'waiting') {
+    //   return { 
+    //     canStart: false, 
+    //     reason: `Room is not in waiting status. Current status: ${room.status}` 
+    //   };
+    // }
     
     return { canStart: true };
   }

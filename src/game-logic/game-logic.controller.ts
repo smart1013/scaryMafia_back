@@ -7,6 +7,8 @@ import { NightActionDto } from './dto/night-action.dto';
 import { NightActionResponseDto } from './dto/night-action-response.dto';
 import { PoliceInvestigationDto } from './dto/police-investigation.dto';
 import { PoliceInvestigationResponseDto } from './dto/police-investigation-response.dto';
+import { VoteDto } from './dto/vote.dto';
+import { VoteResponseDto } from './dto/vote-response.dto';
 
 @Controller('game-logic')
 export class GameLogicController {
@@ -129,6 +131,28 @@ export class GameLogicController {
   @Get('police-investigation-results/:roomId')
   async getAllPoliceInvestigationResults(@Param('roomId') roomId: string) {
     return await this.gameLogicService.getAllPoliceInvestigationResults(roomId);
+  }
+
+  @Post('vote/:roomId')
+  async submitVote(
+    @Param('roomId') roomId: string,
+    @Body() voteDto: VoteDto
+  ): Promise<VoteResponseDto> {
+    return await this.gameLogicService.submitVote(
+      roomId, 
+      voteDto.userId, 
+      voteDto.targetUserId
+    );
+  }
+
+  @Get('vote-status/:roomId')
+  async getVoteStatus(@Param('roomId') roomId: string) {
+    return await this.gameLogicService.getVoteStatus(roomId);
+  }
+
+  @Get('vote-completion/:roomId')
+  async getVoteCompletion(@Param('roomId') roomId: string) {
+    return await this.gameLogicService.getVoteCompletion(roomId);
   }
 
 }

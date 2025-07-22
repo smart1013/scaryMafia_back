@@ -179,20 +179,30 @@ export class RedisService {
     return await this.get(`game:${gameId}:phase`);
   }
 
-  async setPlayerVote(gameId: string, playerId: string, targetId: string): Promise<void> {
-    await this.hset(`game:${gameId}:votes`, playerId, targetId);
+  async setPlayerVote(roomId: string, dayNumber: number, playerId: string, targetId: string): Promise<void> {
+    const key = `game:${roomId}:votes:${dayNumber}`;
+    await this.hset(key, playerId, targetId);
+    await this.expire(key, 3600); // 1 hour TTL
   }
 
-  async getPlayerVote(gameId: string, playerId: string): Promise<string | null> {
-    return await this.hget(`game:${gameId}:votes`, playerId);
+  async getPlayerVote(roomId: string, dayNumber: number, playerId: string): Promise<string | null> {
+    const key = `game:${roomId}:votes:${dayNumber}`;
+    return await this.hget(key, playerId);
   }
 
-  async getAllVotes(gameId: string): Promise<Record<string, string>> {
-    return await this.hgetall(`game:${gameId}:votes`);
+  async getAllVotes(roomId: string, dayNumber: number): Promise<Record<string, string>> {
+    const key = `game:${roomId}:votes:${dayNumber}`;
+    return await this.hgetall(key);
   }
 
-  async clearGameVotes(gameId: string): Promise<void> {
-    await this.delete(`game:${gameId}:votes`);
+  async clearGameVotes(roomId: string, dayNumber: number): Promise<void> {
+    const key = `game:${roomId}:votes:${dayNumber}`;
+    await this.delete(key);
+  }
+
+  async checkVoteCompletion(roomId: string, dayNumber: number, alivePlayerIds: string[]): Promise<boolean> {
+    const votes = await this.getAllVotes(roomId, dayNumber);
+    return alivePlayerIds.every(playerId => votes[playerId]);
   }
 
   async setOnlineUser(userId: string): Promise<void> {
