@@ -7,7 +7,6 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({
     transform: true,
   }));
-  await app.listen(process.env.PORT ?? 8000);
 
   // CORS(Cross-Origin Resource Sharing) 설정 추가 
   app.enableCors({  

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEnum, IsUUID } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsUUID, IsBoolean } from 'class-validator';
 
 export class UpdateRoomDto {
   @IsOptional()
@@ -16,4 +16,8 @@ export class UpdateRoomDto {
   @IsOptional()
   @IsUUID()
   hostUserId?: string;
-} 
+
+  @IsOptional()
+  @IsBoolean()
+  isHostDelegation?: boolean;
+}

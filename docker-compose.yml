@@ -29,7 +29,7 @@ services:
       - mafia_network
     restart: unless-stopped
 
-  # backend:doc
+  # backend:
   #   build: .
   #   container_name: mafia_backend
   #   ports:

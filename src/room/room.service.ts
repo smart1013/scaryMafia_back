@@ -49,8 +49,8 @@ export class RoomService {
   async update(roomId: string, updateRoomDto: UpdateRoomDto): Promise<RoomResponseDto> {
     const room = await this.findOne(roomId);
     
-    // Check if user is already in another room (if changing host)
-    if (updateRoomDto.hostUserId && updateRoomDto.hostUserId !== room.hostUser?.userId) {
+    // Check if user is already in another room (if changing host, and not a delegation)
+    if (updateRoomDto.hostUserId && updateRoomDto.hostUserId !== room.hostUser?.userId && !updateRoomDto.isHostDelegation) {
       await this.checkUserRoomConstraint(updateRoomDto.hostUserId);
     }
     
@@ -102,11 +102,11 @@ export class RoomService {
       throw new ConflictException(`User is already hosting a room (Room ID: ${existingHostedRoom.roomId})`);
     }
 
-    // Check if user is participating in another room (Redis check)
-    const currentRoomId = await this.redisService.getUserCurrentRoom(userId);
-    if (currentRoomId) {
-      throw new ConflictException(`User is already in another room (Room ID: ${currentRoomId}). Please leave the current room before creating a new one.`);
-    }
+    // // Check if user is participating in another room (Redis check)
+    // const currentRoomId = await this.redisService.getUserCurrentRoom(userId);
+    // if (currentRoomId) {
+    //   throw new ConflictException(`User is already in another room (Room ID: ${currentRoomId}). Please leave the current room before creating a new one.`);
+    // }
   }
 
   private mapToResponseDto(room: Room): RoomResponseDto {
@@ -255,15 +255,22 @@ export class RoomService {
     if (room.hostUser?.userId === userId) {
       // Assign new host (first remaining participant)
       const newHostId = remainingParticipants[0];
-      await this.update(roomId, { hostUserId: newHostId });
+      await this.update(roomId, { hostUserId: newHostId, isHostDelegation: true });
+      
+      return {
+        message: 'Successfully left room and assigned new host.',
+        roomId,
+        userId,
+        roomDeleted: false
+      };
+    } else {
+      return {
+        message: 'Successfully left room',
+        roomId,
+        userId,
+        roomDeleted: false
+      };
     }
-  
-    return {
-      message: 'Successfully left room',
-      roomId,
-      userId,
-      roomDeleted: false
-    };
   } 
 
   async getRoomParticipants(roomId: string): Promise<{
