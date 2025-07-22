@@ -178,6 +178,9 @@ export class RoomService {
     
     // Check if game can be started
     const gameStartCheck = await this.canStartGame(roomId);
+    if (gameStartCheck.canStart) {
+      await this.roomRepository.update(roomId, { status: 'in_progress' });
+    }
     
     return {
       message: gameStartCheck.canStart 
@@ -228,7 +231,7 @@ export class RoomService {
     }
 
     // Update room status to in_progress
-    await this.roomRepository.update(roomId, { status: 'in_progress' });
+    // await this.roomRepository.update(roomId, { status: 'in_progress' });
     
     // Get room participants in order
     const participants = await this.redisService.getRoomParticipants(roomId);

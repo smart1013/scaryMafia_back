@@ -3,6 +3,10 @@ import { GameLogicService } from './game-logic.service';
 import { GamePhase } from '../common/enums/game-phase.enum';
 import { GetPlayerStateDto } from './dto/get-player-state.dto';
 import { PlayerStateResponseDto } from './dto/player-state-response.dto';
+import { NightActionDto } from './dto/night-action.dto';
+import { NightActionResponseDto } from './dto/night-action-response.dto';
+import { PoliceInvestigationDto } from './dto/police-investigation.dto';
+import { PoliceInvestigationResponseDto } from './dto/police-investigation-response.dto';
 
 @Controller('game-logic')
 export class GameLogicController {
@@ -63,6 +67,68 @@ export class GameLogicController {
       throw new NotFoundException('Player not found in this game or game not found');
     }
     return playerState;
+  }
+
+  // Night Action Endpoints
+  @Post('night-action/mafia/:roomId')
+  async mafiaNightAction(
+    @Param('roomId') roomId: string,
+    @Body() nightActionDto: NightActionDto
+  ): Promise<NightActionResponseDto> {
+    return await this.gameLogicService.processNightAction(
+      roomId, 
+      nightActionDto.userId, 
+      'mafia', 
+      nightActionDto.targetUserId
+    );
+  }
+
+  @Post('night-action/doctor/:roomId')
+  async doctorNightAction(
+    @Param('roomId') roomId: string,
+    @Body() nightActionDto: NightActionDto
+  ): Promise<NightActionResponseDto> {
+    return await this.gameLogicService.processNightAction(
+      roomId, 
+      nightActionDto.userId, 
+      'doctor', 
+      nightActionDto.targetUserId
+    );
+  }
+
+  @Post('night-action/police/:roomId')
+  async policeNightAction(
+    @Param('roomId') roomId: string,
+    @Body() nightActionDto: NightActionDto
+  ): Promise<NightActionResponseDto> {
+    return await this.gameLogicService.processNightAction(
+      roomId, 
+      nightActionDto.userId, 
+      'police', 
+      nightActionDto.targetUserId
+    );
+  }
+
+  @Get('night-actions/:roomId')
+  async getNightActions(@Param('roomId') roomId: string) {
+    return await this.gameLogicService.getNightActions(roomId);
+  }
+
+  @Get('night-action-status/:roomId')
+  async getNightActionStatus(@Param('roomId') roomId: string) {
+    return await this.gameLogicService.getNightActionStatus(roomId);
+  }
+
+  // Police Investigation Result Endpoint
+  @Get('police-investigation-result/:roomId')
+  async getPoliceInvestigationResult(@Param('roomId') roomId: string): Promise<PoliceInvestigationResponseDto> {
+    return await this.gameLogicService.getPoliceInvestigationResult(roomId);
+  }
+
+  // Get all police investigation results (for game master/host)
+  @Get('police-investigation-results/:roomId')
+  async getAllPoliceInvestigationResults(@Param('roomId') roomId: string) {
+    return await this.gameLogicService.getAllPoliceInvestigationResults(roomId);
   }
 
 }

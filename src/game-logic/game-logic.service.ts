@@ -5,6 +5,8 @@ import { GameState, GameSettings } from './interfaces/game-state.interface';
 import { GamePhase } from '../common/enums/game-phase.enum';
 import { RoleType } from '../common/enums/role-type.enum';
 import { PlayerStateResponseDto } from './dto/player-state-response.dto';
+import { NightActionResponseDto } from './dto/night-action-response.dto';
+import { PoliceInvestigationResponseDto } from './dto/police-investigation-response.dto';
 
 @Injectable()
 export class GameLogicService {
@@ -76,6 +78,10 @@ export class GameLogicService {
     gameState.nightActions = {}; // Reset night actions
 
     await this.updateGameState(roomId, gameState);
+    
+    // Initialize night actions in Redis
+    await this.redisService.clearNightActions(roomId, gameState.dayNumber);
+    
     this.logger.log(`Transitioned to night phase for room ${roomId}`);
 
     return gameState;
@@ -88,21 +94,49 @@ export class GameLogicService {
     const gameState = await this.getGameState(roomId);
     if (!gameState) throw new Error('Game state not found');
 
-    // Process night actions (e.g., mafia kill, police investigate)
-    // Example: mafiaTarget elimination
-    if (gameState.nightActions.mafiaTarget) {
-      const targetPlayer = gameState.players.find(p => p.userId === gameState.nightActions.mafiaTarget);
-      if (targetPlayer && targetPlayer.isAlive) {
+    // Get night actions from Redis
+    const nightActions = await this.redisService.getAllNightActions(roomId, gameState.dayNumber);
+    
+    // Process mafia kill
+    if (nightActions['mafia_target']) {
+      const mafiaTarget = nightActions['mafia_target'];
+      const targetPlayer = gameState.players.find(p => p.userId === mafiaTarget);
+      
+      // Check if doctor protected the target
+      const doctorTarget = nightActions['doctor_target'];
+      const wasProtected = doctorTarget === mafiaTarget;
+      
+      if (targetPlayer && targetPlayer.isAlive && !wasProtected) {
         targetPlayer.isAlive = false;
         gameState.eliminatedPlayers.push(targetPlayer.userId);
+        this.logger.log(`Mafia killed ${targetPlayer.nickname}`);
+      } else if (wasProtected) {
+        this.logger.log(`Doctor protected ${targetPlayer?.nickname} from mafia attack`);
       }
     }
-    // (Add police/villain logic as needed)
+
+    // Process police investigation (store result for later retrieval)
+    if (nightActions['police_target']) {
+      const policeTarget = nightActions['police_target'];
+      const targetPlayer = gameState.players.find(p => p.userId === policeTarget);
+      if (targetPlayer) {
+        // Store investigation result in Redis for police to retrieve
+        await this.redisService.set(
+          `game:${roomId}:investigation:${gameState.dayNumber}:${nightActions['police_target']}`,
+          targetPlayer.role,
+          3600
+        );
+      }
+    }
 
     gameState.phase = GamePhase.NIGHT_RESULT;
 
     await this.updateGameState(roomId, gameState);
     await this.checkWinConditions(roomId);
+    
+    // Clear night actions after processing
+    await this.redisService.clearNightActions(roomId, gameState.dayNumber);
+    
     return gameState;
   }
 
@@ -267,5 +301,170 @@ export class GameLogicService {
   private logGameState(gameState: GameState): void {
     this.logger.log(`Game initialized for room ${gameState.roomId}`);
     this.logger.log(`Players: ${gameState.players.map(p => `${p.nickname}(${p.role})`).join(', ')}`);
+  }
+
+  /**
+   * Process night action for a specific role
+   */
+  async processNightAction(
+    roomId: string, 
+    userId: string, 
+    role: string, 
+    targetUserId: string
+  ): Promise<NightActionResponseDto> {
+    const gameState = await this.getGameState(roomId);
+    if (!gameState) {
+      throw new Error('Game state not found');
+    }
+
+    // Validate game phase
+    if (gameState.phase !== GamePhase.NIGHT) {
+      throw new Error('Night actions can only be performed during night phase');
+    }
+
+    // Validate player role
+    const player = gameState.players.find(p => p.userId === userId);
+    if (!player || player.role !== role || !player.isAlive) {
+      throw new Error(`Player is not a valid ${role} or is not alive`);
+    }
+
+    // Validate target player
+    const targetPlayer = gameState.players.find(p => p.userId === targetUserId);
+    if (!targetPlayer || !targetPlayer.isAlive) {
+      throw new Error('Target player not found or not alive');
+    }
+
+    // Set night action in Redis
+    await this.redisService.setNightAction(roomId, gameState.dayNumber, role, targetUserId);
+
+    // Check if all actions are complete
+    const allComplete = await this.redisService.checkNightActionCompletion(roomId, gameState.dayNumber);
+
+    return {
+      success: true,
+      message: `${role} selected ${targetPlayer.nickname} as target`,
+      role,
+      targetUserId,
+      allActionsComplete: allComplete
+    };
+  }
+
+  /**
+   * Get all night actions for a room
+   */
+  async getNightActions(roomId: string) {
+    const gameState = await this.getGameState(roomId);
+    if (!gameState) {
+      throw new Error('Game state not found');
+    }
+
+    const nightActions = await this.redisService.getAllNightActions(roomId, gameState.dayNumber);
+    
+    // Only return target selections, not the completion status
+    const actions = {
+      mafiaTarget: nightActions['mafia_target'] || null,
+      doctorTarget: nightActions['doctor_target'] || null,
+      policeTarget: nightActions['police_target'] || null
+    };
+
+    return {
+      roomId,
+      dayNumber: gameState.dayNumber,
+      actions
+    };
+  }
+
+  /**
+   * Get night action completion status
+   */
+  async getNightActionStatus(roomId: string) {
+    const gameState = await this.getGameState(roomId);
+    if (!gameState) {
+      throw new Error('Game state not found');
+    }
+
+    return await this.redisService.getNightActionStatus(roomId, gameState.dayNumber);
+  }
+
+  /**
+   * Get police investigation result for the current game
+   */
+  async getPoliceInvestigationResult(roomId: string) {
+    const gameState = await this.getGameState(roomId);
+    if (!gameState) {
+      throw new Error('Game state not found');
+    }
+
+    // Only show investigation results during DAY phase or later
+    if (gameState.phase === GamePhase.NIGHT ) {
+      return {
+        success: false,
+        message: 'Investigation results are not available during night phase',
+        investigationResults: null
+      };
+    }
+
+    // Get all investigation results for the current day
+    const investigationResults = await this.redisService.getAllPoliceInvestigationResults(
+      roomId, 
+      gameState.dayNumber
+    );
+
+    // Map user IDs to player nicknames and create a more detailed response
+    const resultsWithDetails: Array<{
+      targetUserId: string;
+      targetNickname: string;
+      targetRole: string;
+      isAlive: boolean;
+    }> = [];
+    for (const [targetUserId, targetRole] of Object.entries(investigationResults)) {
+      const targetPlayer = gameState.players.find(p => p.userId === targetUserId);
+      if (targetPlayer) {
+        resultsWithDetails.push({
+          targetUserId,
+          targetNickname: targetPlayer.nickname,
+          targetRole,
+          isAlive: targetPlayer.isAlive
+        });
+      }
+    }
+
+    return {
+      success: true,
+      message: `Investigation results for day ${gameState.dayNumber}`,
+      dayNumber: gameState.dayNumber,
+      gamePhase: gameState.phase,
+      investigationResults: resultsWithDetails
+    };
+  }
+
+  /**
+   * Get all police investigation results (for game master/host)
+   */
+  async getAllPoliceInvestigationResults(roomId: string) {
+    const gameState = await this.getGameState(roomId);
+    if (!gameState) {
+      throw new Error('Game state not found');
+    }
+
+    const investigationResults = await this.redisService.getAllPoliceInvestigationResults(
+      roomId, 
+      gameState.dayNumber
+    );
+
+    // Map user IDs to player nicknames
+    const resultsWithNicknames = {};
+    for (const [targetUserId, targetRole] of Object.entries(investigationResults)) {
+      const targetPlayer = gameState.players.find(p => p.userId === targetUserId);
+      if (targetPlayer) {
+        resultsWithNicknames[targetPlayer.nickname] = targetRole;
+      }
+    }
+
+    return {
+      roomId,
+      dayNumber: gameState.dayNumber,
+      investigationResults: resultsWithNicknames
+    };
   }
 }

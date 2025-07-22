@@ -247,4 +247,80 @@ export class RedisService {
       };
     }
   }
+
+  // Night Action Methods
+  async setNightAction(roomId: string, dayNumber: number, role: string, targetUserId: string): Promise<void> {
+    const key = `game:${roomId}:night-actions:${dayNumber}`;
+    await this.hset(key, `${role}_target`, targetUserId);
+    await this.hset(key, `${role}_selected`, 'true');
+    await this.expire(key, 3600); // 1 hour TTL
+  }
+
+  async getNightAction(roomId: string, dayNumber: number, role: string): Promise<string | null> {
+    const key = `game:${roomId}:night-actions:${dayNumber}`;
+    return await this.hget(key, `${role}_target`);
+  }
+
+  async getAllNightActions(roomId: string, dayNumber: number): Promise<Record<string, string>> {
+    const key = `game:${roomId}:night-actions:${dayNumber}`;
+    return await this.hgetall(key);
+  }
+
+  async checkNightActionCompletion(roomId: string, dayNumber: number): Promise<boolean> {
+    const key = `game:${roomId}:night-actions:${dayNumber}`;
+    const actions = await this.hgetall(key);
+    
+    // Check if all required roles have selected
+    const requiredRoles = ['mafia', 'doctor', 'police'];
+    return requiredRoles.every(role => actions[`${role}_selected`] === 'true');
+  }
+
+  async clearNightActions(roomId: string, dayNumber: number): Promise<void> {
+    const key = `game:${roomId}:night-actions:${dayNumber}`;
+    await this.delete(key);
+  }
+
+  async getNightActionStatus(roomId: string, dayNumber: number): Promise<{
+    mafiaSelected: boolean;
+    doctorSelected: boolean;
+    policeSelected: boolean;
+    allComplete: boolean;
+  }> {
+    const key = `game:${roomId}:night-actions:${dayNumber}`;
+    const actions = await this.hgetall(key);
+    
+    const mafiaSelected = actions['mafia_selected'] === 'true';
+    const doctorSelected = actions['doctor_selected'] === 'true';
+    const policeSelected = actions['police_selected'] === 'true';
+    
+    return {
+      mafiaSelected,
+      doctorSelected,
+      policeSelected,
+      allComplete: mafiaSelected && doctorSelected && policeSelected
+    };
+  }
+
+  // Police Investigation Result Methods
+  async getPoliceInvestigationResult(roomId: string, dayNumber: number, targetUserId: string): Promise<string | null> {
+    const key = `game:${roomId}:investigation:${dayNumber}:${targetUserId}`;
+    return await this.get(key);
+  }
+
+  async getAllPoliceInvestigationResults(roomId: string, dayNumber: number): Promise<Record<string, string>> {
+    // Get all investigation keys for this room and day
+    const pattern = `game:${roomId}:investigation:${dayNumber}:*`;
+    const keys = await this.redis.keys(pattern);
+    
+    const results: Record<string, string> = {};
+    for (const key of keys) {
+      const targetUserId = key.split(':').pop(); // Extract userId from key
+      const role = await this.get(key);
+      if (targetUserId && role) {
+        results[targetUserId] = role;
+      }
+    }
+    
+    return results;
+  }
 }
