@@ -100,5 +100,4 @@ export class RoomController {
       throw new BadRequestException(error.message);
     }
   }
-
 }
