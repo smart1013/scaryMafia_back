@@ -6,11 +6,13 @@
 3. [User Management](#user-management)
 4. [Room Management](#room-management)
 5. [Game Logic](#game-logic)
-6. [Game Management](#game-management)
-7. [Game Participants](#game-participants)
-8. [Redis Management](#redis-management)
-9. [Data Models](#data-models)
-10. [Error Handling](#error-handling)
+6. [Night Action System](#night-action-system)
+7. [Voting System](#voting-system)
+8. [Game Management](#game-management)
+9. [Game Participants](#game-participants)
+10. [Redis Management](#redis-management)
+11. [Data Models](#data-models)
+12. [Error Handling](#error-handling)
 
 ---
 
@@ -30,6 +32,7 @@
 - Complete Mafia game mechanics with night actions
 - Role-based gameplay (Mafia, Police, Doctor, Citizen, Villain)
 - Night action selection system with Redis tracking
+- Voting system with duplicate vote prevention
 
 ---
 
@@ -634,6 +637,175 @@ Get all police investigation results (for game master/host).
 
 ---
 
+## Voting System
+
+### Submit Vote
+**POST** `/game-logic/vote/{roomId}`
+
+Submit a vote to eliminate a player during vote phase.
+
+**Request Body**:
+```json
+{
+  "userId": "voter-user-id",
+  "targetUserId": "target-user-id"
+}
+```
+
+**Response (200) - Success**:
+```json
+{
+  "success": true,
+  "message": "player1 voted to eliminate player2",
+  "voteCount": 6,
+  "allVotesComplete": false
+}
+```
+
+**Response (200) - All Votes Complete**:
+```json
+{
+  "success": true,
+  "message": "player1 voted to eliminate player2",
+  "voteCount": 6,
+  "allVotesComplete": true
+}
+```
+
+**Error Responses**:
+
+**Already Voted (400)**:
+```json
+{
+  "statusCode": 400,
+  "message": "player1 has already voted to eliminate player2. You cannot vote again.",
+  "error": "Bad Request"
+}
+```
+
+**Self-Voting (400)**:
+```json
+{
+  "statusCode": 400,
+  "message": "player1 cannot vote to eliminate themselves.",
+  "error": "Bad Request"
+}
+```
+
+**Wrong Phase (400)**:
+```json
+{
+  "statusCode": 400,
+  "message": "Voting can only be done during vote phase",
+  "error": "Bad Request"
+}
+```
+
+**Player Not Found (400)**:
+```json
+{
+  "statusCode": 400,
+  "message": "Player not found or not alive",
+  "error": "Bad Request"
+}
+```
+
+**Target Not Found (400)**:
+```json
+{
+  "statusCode": 400,
+  "message": "Target player not found or not alive",
+  "error": "Bad Request"
+}
+```
+
+### Get Vote Status
+**GET** `/game-logic/vote-status/{roomId}`
+
+Get current vote counts and leading targets.
+
+**Response (200)**:
+```json
+{
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "dayNumber": 1,
+  "votes": {
+    "player1-id": "player2-id",
+    "player3-id": "player1-id", 
+    "player4-id": "player2-id",
+    "player5-id": "player2-id"
+  },
+  "voteCounts": {
+    "player1-id": 1,
+    "player2-id": 3
+  },
+  "topTargets": ["player2-id"],
+  "maxVotes": 3,
+  "tie": false
+}
+```
+
+**Response (200) - Tie**:
+```json
+{
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "dayNumber": 1,
+  "votes": {
+    "player1-id": "player2-id",
+    "player3-id": "player1-id", 
+    "player4-id": "player2-id",
+    "player5-id": "player1-id"
+  },
+  "voteCounts": {
+    "player1-id": 2,
+    "player2-id": 2
+  },
+  "topTargets": ["player1-id", "player2-id"],
+  "maxVotes": 2,
+  "tie": true
+}
+```
+
+### Get Vote Completion
+**GET** `/game-logic/vote-completion/{roomId}`
+
+Check which players still need to vote.
+
+**Response (200) - Incomplete**:
+```json
+{
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "dayNumber": 1,
+  "totalAlivePlayers": 6,
+  "votedPlayers": 4,
+  "remainingPlayers": [
+    {
+      "userId": "player5-id",
+      "nickname": "player5"
+    },
+    {
+      "userId": "player6-id", 
+      "nickname": "player6"
+    }
+  ],
+  "allVotesComplete": false
+}
+```
+
+**Response (200) - Complete**:
+```json
+{
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "dayNumber": 1,
+  "totalAlivePlayers": 6,
+  "votedPlayers": 6,
+  "remainingPlayers": [],
+  "allVotesComplete": true
+}
+```
+
+---
+
 ## Game Management
 
 ### Create Game
@@ -814,7 +986,9 @@ interface GameState {
 }
 ```
 
-### Night Action DTOs
+### DTOs
+
+#### Night Action DTOs
 ```typescript
 // Request DTO
 interface NightActionDto {
@@ -844,6 +1018,23 @@ interface PoliceInvestigationResponseDto {
     targetRole: string;
     isAlive: boolean;
   }> | null;
+}
+```
+
+#### Vote DTOs
+```typescript
+// Request DTO
+interface VoteDto {
+  userId: string;
+  targetUserId: string;
+}
+
+// Response DTO
+interface VoteResponseDto {
+  success: boolean;
+  message: string;
+  voteCount?: number;
+  allVotesComplete?: boolean;
 }
 ```
 
@@ -946,6 +1137,14 @@ interface PoliceInvestigationResponseDto {
 4. **Process Results**: Call `/game-logic/transition-night-result/{roomId}` to process actions
 5. **View Results**: Police can view investigation results via `/game-logic/police-investigation-result/{roomId}` during day phase
 
+### Voting Flow
+1. **Vote Phase Starts**: System clears previous votes and initializes empty vote tracking
+2. **Player Voting**: Each alive player submits vote via `/game-logic/vote/{roomId}`
+3. **Vote Tracking**: System prevents duplicate votes and self-voting
+4. **Completion Check**: Use `/game-logic/vote-completion/{roomId}` to check remaining voters
+5. **Vote Status**: Use `/game-logic/vote-status/{roomId}` to see current vote counts
+6. **Process Votes**: Call `/game-logic/transition-day-result/{roomId}` to eliminate player with most votes
+
 ### Role Distribution (by player count)
 - **8 players**: 2 Mafia, 1 Police, 1 Doctor, 3 Citizens, 1 Villain
 - **9 players**: 2 Mafia, 1 Police, 1 Doctor, 4 Citizens, 1 Villain
@@ -976,6 +1175,14 @@ TTL: 1 hour
 Key: game:{roomId}:investigation:{dayNumber}:{targetUserId}
 Type: String
 Value: "role"
+TTL: 1 hour
+```
+
+### Votes
+```
+Key: game:{roomId}:votes:{dayNumber}
+Type: Hash
+Fields: {userId: targetUserId}
 TTL: 1 hour
 ```
 
@@ -1041,4 +1248,7 @@ CORS is enabled for all origins in development mode.
 - Database stores persistent game records and user data
 - Night actions are validated for role permissions and game phase
 - Police investigation results are only available during day phase or later
-- All night actions must be completed before processing night results 
+- All night actions must be completed before processing night results
+- Voting system prevents duplicate votes and self-voting
+- Votes are automatically cleared at the start of each vote phase
+- All validation errors return proper HTTP status codes with descriptive messages 

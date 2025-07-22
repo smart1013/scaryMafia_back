@@ -276,13 +276,40 @@ export class RedisService {
     return await this.hgetall(key);
   }
 
-  async checkNightActionCompletion(roomId: string, dayNumber: number): Promise<boolean> {
+  async checkNightActionCompletion(roomId: string, dayNumber: number, alivePlayerIds?: string[]): Promise<boolean> {
     const key = `game:${roomId}:night-actions:${dayNumber}`;
     const actions = await this.hgetall(key);
     
     // Check if all required roles have selected
     const requiredRoles = ['mafia', 'doctor', 'police'];
-    return requiredRoles.every(role => actions[`${role}_selected`] === 'true');
+    
+    // If alivePlayerIds is provided, check if eliminated roles should be auto-marked as selected
+    if (alivePlayerIds) {
+      // Get the game state to check which roles are eliminated
+      const gameStateKey = `game:${roomId}:state`;
+      const gameStateData = await this.get(gameStateKey);
+      
+      if (gameStateData) {
+        const gameState = JSON.parse(gameStateData);
+        
+        // Check each role and auto-mark as selected if the player is eliminated
+        for (const player of gameState.players) {
+          if (!player.isAlive) {
+            if (player.role === 'mafia' && actions['mafia_selected'] !== 'true') {
+              await this.hset(key, 'mafia_selected', 'true');
+            } else if (player.role === 'doctor' && actions['doctor_selected'] !== 'true') {
+              await this.hset(key, 'doctor_selected', 'true');
+            } else if (player.role === 'police' && actions['police_selected'] !== 'true') {
+              await this.hset(key, 'police_selected', 'true');
+            }
+          }
+        }
+      }
+    }
+    
+    // Get updated actions after potential auto-marking
+    const updatedActions = await this.hgetall(key);
+    return requiredRoles.every(role => updatedActions[`${role}_selected`] === 'true');
   }
 
   async clearNightActions(roomId: string, dayNumber: number): Promise<void> {
@@ -290,7 +317,7 @@ export class RedisService {
     await this.delete(key);
   }
 
-  async getNightActionStatus(roomId: string, dayNumber: number): Promise<{
+  async getNightActionStatus(roomId: string, dayNumber: number, alivePlayerIds?: string[]): Promise<{
     mafiaSelected: boolean;
     doctorSelected: boolean;
     policeSelected: boolean;
@@ -299,9 +326,39 @@ export class RedisService {
     const key = `game:${roomId}:night-actions:${dayNumber}`;
     const actions = await this.hgetall(key);
     
-    const mafiaSelected = actions['mafia_selected'] === 'true';
-    const doctorSelected = actions['doctor_selected'] === 'true';
-    const policeSelected = actions['police_selected'] === 'true';
+    let mafiaSelected = actions['mafia_selected'] === 'true';
+    let doctorSelected = actions['doctor_selected'] === 'true';
+    let policeSelected = actions['police_selected'] === 'true';
+    
+    // If alivePlayerIds is provided, check if eliminated roles should be auto-marked as selected
+    if (alivePlayerIds) {
+      // Get the game state to check which roles are eliminated
+      const gameStateKey = `game:${roomId}:state`;
+      const gameStateData = await this.get(gameStateKey);
+      
+      if (gameStateData) {
+        const gameState = JSON.parse(gameStateData);
+        
+        // Check each role and auto-mark as selected if the player is eliminated
+        for (const player of gameState.players) {
+          if (!player.isAlive) {
+            if (player.role === 'mafia' && !mafiaSelected) {
+              mafiaSelected = true;
+              // Also set it in Redis for consistency
+              await this.hset(key, 'mafia_selected', 'true');
+            } else if (player.role === 'doctor' && !doctorSelected) {
+              doctorSelected = true;
+              // Also set it in Redis for consistency
+              await this.hset(key, 'doctor_selected', 'true');
+            } else if (player.role === 'police' && !policeSelected) {
+              policeSelected = true;
+              // Also set it in Redis for consistency
+              await this.hset(key, 'police_selected', 'true');
+            }
+          }
+        }
+      }
+    }
     
     return {
       mafiaSelected,

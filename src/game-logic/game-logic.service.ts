@@ -354,8 +354,9 @@ export class GameLogicService {
     // Set night action in Redis
     await this.redisService.setNightAction(roomId, gameState.dayNumber, role, targetUserId);
 
-    // Check if all actions are complete
-    const allComplete = await this.redisService.checkNightActionCompletion(roomId, gameState.dayNumber);
+    // Check if all actions are complete (pass alive player IDs to handle eliminated roles)
+    const alivePlayerIds = gameState.players.filter(p => p.isAlive).map(p => p.userId);
+    const allComplete = await this.redisService.checkNightActionCompletion(roomId, gameState.dayNumber, alivePlayerIds);
 
     return {
       success: true,
@@ -400,7 +401,9 @@ export class GameLogicService {
       throw new Error('Game state not found');
     }
 
-    return await this.redisService.getNightActionStatus(roomId, gameState.dayNumber);
+    // Pass alive player IDs to handle eliminated roles
+    const alivePlayerIds = gameState.players.filter(p => p.isAlive).map(p => p.userId);
+    return await this.redisService.getNightActionStatus(roomId, gameState.dayNumber, alivePlayerIds);
   }
 
   /**
