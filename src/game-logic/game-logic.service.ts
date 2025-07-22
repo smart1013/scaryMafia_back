@@ -4,6 +4,7 @@ import { RoleAssignmentService } from './services/role-assignment.service';
 import { GameState, GameSettings } from './interfaces/game-state.interface';
 import { GamePhase } from '../common/enums/game-phase.enum';
 import { RoleType } from '../common/enums/role-type.enum';
+import { PlayerStateResponseDto } from './dto/player-state-response.dto';
 
 @Injectable()
 export class GameLogicService {
@@ -27,19 +28,12 @@ export class GameLogicService {
     const gameState: GameState = {
       roomId,
       phase: GamePhase.STARTING,
-      dayNumber: 0,
+      dayNumber: 1,
       players,
-      phaseEndTime: new Date(Date.now() + 30000), // 30 seconds for starting phase
-      currentPhaseStartTime: new Date(),
-      phaseDuration: 30,
       eliminatedPlayers: [],
       voteResults: {},
       nightActions: {},
-      settings: {
-        dayPhaseDuration: 180, // 2 minutes
-        nightPhaseDuration: 60, // 1 minute
-        votePhaseDuration: 60, // 1 minute
-      },
+      settings: {},
     };
 
     // Store game state in Redis
@@ -68,27 +62,6 @@ export class GameLogicService {
     await this.redisService.set(`game:${roomId}:state`, JSON.stringify(gameState), 3600);
   }
 
-  /**
-   * Start the first night phase
-   */
-  async startFirstNight(roomId: string): Promise<GameState> {
-    const gameState = await this.getGameState(roomId);
-    if (!gameState) {
-      throw new Error(`Game state not found for room ${roomId}`);
-    }
-
-    gameState.phase = GamePhase.NIGHT;
-    gameState.dayNumber = 1;
-    gameState.currentPhaseStartTime = new Date();
-    gameState.phaseEndTime = new Date(Date.now() + (gameState.settings.nightPhaseDuration * 1000));
-    gameState.phaseDuration = gameState.settings.nightPhaseDuration;
-    gameState.nightActions = {}; // Reset night actions
-
-    await this.updateGameState(roomId, gameState);
-    this.logger.log(`Started night ${gameState.dayNumber} for room ${roomId}`);
-
-    return gameState;
-  }
 
   /**
    * Transition to night phase
@@ -100,9 +73,6 @@ export class GameLogicService {
     }
 
     gameState.phase = GamePhase.NIGHT;
-    gameState.currentPhaseStartTime = new Date();
-    gameState.phaseEndTime = new Date(Date.now() + (gameState.settings.nightPhaseDuration * 1000));
-    gameState.phaseDuration = gameState.settings.nightPhaseDuration;
     gameState.nightActions = {}; // Reset night actions
 
     await this.updateGameState(roomId, gameState);
@@ -130,9 +100,6 @@ export class GameLogicService {
     // (Add police/villain logic as needed)
 
     gameState.phase = GamePhase.NIGHT_RESULT;
-    gameState.currentPhaseStartTime = new Date();
-    gameState.phaseEndTime = new Date(Date.now() + 15000); // 15s for results
-    gameState.phaseDuration = 15;
 
     await this.updateGameState(roomId, gameState);
     await this.checkWinConditions(roomId);
@@ -148,9 +115,6 @@ export class GameLogicService {
 
     gameState.phase = GamePhase.DAY;
     gameState.dayNumber += 1;
-    gameState.currentPhaseStartTime = new Date();
-    gameState.phaseEndTime = new Date(Date.now() + (gameState.settings.dayPhaseDuration * 1000));
-    gameState.phaseDuration = gameState.settings.dayPhaseDuration;
 
     await this.updateGameState(roomId, gameState);
     return gameState;
@@ -164,9 +128,6 @@ export class GameLogicService {
     if (!gameState) throw new Error('Game state not found');
 
     gameState.phase = GamePhase.VOTE;
-    gameState.currentPhaseStartTime = new Date();
-    gameState.phaseEndTime = new Date(Date.now() + (gameState.settings.votePhaseDuration * 1000));
-    gameState.phaseDuration = gameState.settings.votePhaseDuration;
     gameState.voteResults = {};
 
     await this.updateGameState(roomId, gameState);
@@ -205,9 +166,6 @@ export class GameLogicService {
     }
 
     gameState.phase = GamePhase.DAY_RESULT;
-    gameState.currentPhaseStartTime = new Date();
-    gameState.phaseEndTime = new Date(Date.now() + 15000); // 15s for results
-    gameState.phaseDuration = 15;
 
     await this.updateGameState(roomId, gameState);
     await this.checkWinConditions(roomId);
@@ -263,7 +221,6 @@ export class GameLogicService {
       roomId: gameState.roomId,
       phase: gameState.phase,
       dayNumber: gameState.dayNumber,
-      phaseEndTime: gameState.phaseEndTime,
       winner: gameState.winner,
       players: gameState.players.map(player => ({
         userId: player.userId,
@@ -278,6 +235,31 @@ export class GameLogicService {
   }
 
 
+
+  /**
+   * Get a specific player's complete state in an active game
+   */
+  async getPlayerState(roomId: string, userId: string): Promise<PlayerStateResponseDto | null> {
+    const gameState = await this.getGameState(roomId);
+    if (!gameState) {
+      return null;
+    }
+
+    const player = gameState.players.find(p => p.userId === userId);
+    if (!player) {
+      return null;
+    }
+
+    return {
+      userId: player.userId,
+      nickname: player.nickname,
+      role: player.role,
+      isAlive: player.isAlive,
+      voteTarget: player.voteTarget,
+      isProtected: player.isProtected,
+      lastAction: player.lastAction
+    };
+  }
 
   /**
    * Log game state for debugging

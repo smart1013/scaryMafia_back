@@ -243,7 +243,8 @@ export class RoomService {
     // Initialize the game using GameLogicService
     await this.gameLogicService.initializeGame(roomId, playerIds, playerNicknames);
     
-    console.log(`Game started in room ${roomId} with ${participants.length} players`);
+    
+    console.log(`Game started in room ${roomId} with ${participants.length} players.`);
   }
 
   async leaveRoom(roomId: string, userId: string): Promise<{ message: string; roomId: string; userId: string; roomDeleted?: boolean }> {

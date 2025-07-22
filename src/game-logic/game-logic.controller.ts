@@ -1,9 +1,14 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, NotFoundException } from '@nestjs/common';
 import { GameLogicService } from './game-logic.service';
+import { GamePhase } from '../common/enums/game-phase.enum';
+import { GetPlayerStateDto } from './dto/get-player-state.dto';
+import { PlayerStateResponseDto } from './dto/player-state-response.dto';
 
 @Controller('game-logic')
 export class GameLogicController {
-  constructor(private readonly gameLogicService: GameLogicService) {}
+  constructor(
+    private readonly gameLogicService: GameLogicService,
+  ) {}
 
   @Get('state/:roomId')
   async getGameState(@Param('roomId') roomId: string) {
@@ -16,11 +21,6 @@ export class GameLogicController {
     @Body('userId') userId?: string
   ) {
     return await this.gameLogicService.getPublicGameState(roomId, userId);
-  }
-
-  @Post('start-night/:roomId')
-  async startFirstNight(@Param('roomId') roomId: string) {
-    return await this.gameLogicService.startFirstNight(roomId);
   }
 
   @Post('transition-night/:roomId')
@@ -53,5 +53,16 @@ export class GameLogicController {
     return await this.gameLogicService.checkWinConditions(roomId);
   }
 
+  @Get('player/state')
+  async getPlayerState(@Body() getPlayerStateDto: GetPlayerStateDto) {
+    const playerState = await this.gameLogicService.getPlayerState(
+      getPlayerStateDto.roomId, 
+      getPlayerStateDto.userId
+    );
+    if (!playerState) {
+      throw new NotFoundException('Player not found in this game or game not found');
+    }
+    return playerState;
+  }
 
 }

@@ -17,12 +17,9 @@ export interface GameState {
   phase: GamePhase;
   dayNumber: number;
   players: PlayerState[];
-  phaseEndTime: Date;
   winner?: 'mafia' | 'citizen' | 'villain';
   
   // Game mechanics
-  currentPhaseStartTime: Date;
-  phaseDuration: number; // in seconds
   eliminatedPlayers: string[]; // userIds of eliminated players
   
   // Voting state
@@ -38,16 +35,11 @@ export interface GameState {
   
   // Game settings
   settings: {
-    dayPhaseDuration: number; // seconds
-    nightPhaseDuration: number; // seconds
-    votePhaseDuration: number; // seconds
+    // Phase duration settings removed - using fixed values instead
   };
 }
 
 export interface GameSettings {
-  dayPhaseDuration?: number;
-  nightPhaseDuration?: number;
-  votePhaseDuration?: number;
   mafiaCount?: number;
   policeCount?: number;
   villainCount?: number;
