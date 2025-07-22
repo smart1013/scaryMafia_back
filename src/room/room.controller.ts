@@ -100,4 +100,13 @@ export class RoomController {
       throw new BadRequestException(error.message);
     }
   }
+
+  @Post(':roomId/start-game')
+  async startGame(@Param('roomId') roomId: string) {
+    try {
+      return await this.roomService.startGame(roomId);
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
+  }
 }

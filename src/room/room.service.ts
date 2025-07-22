@@ -6,6 +6,8 @@ import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { RoomResponseDto } from './dto/room-response.dto';
 import { RedisService } from '../redis/redis.service';
+import { GameLogicService } from '../game-logic/game-logic.service';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class RoomService {
@@ -13,6 +15,8 @@ export class RoomService {
     @InjectRepository(Room)
     private roomRepository: Repository<Room>,
     private redisService: RedisService,
+    private gameLogicService: GameLogicService,
+    private usersService: UsersService,
   ) {}
 
   async create(createRoomDto: CreateRoomDto): Promise<RoomResponseDto> {
@@ -170,59 +174,76 @@ export class RoomService {
     await this.redisService.setUserCurrentRoom(userId, roomId);
 
     // Check if game should auto-start
-    const gameStartCheck = await this.checkAndStartGame(roomId);
-
+    //const gameStartCheck = await this.checkAndStartGame(roomId);
+    
+    // Check if game can be started
+    const gameStartCheck = await this.canStartGame(roomId);
+    
     return {
-      message: gameStartCheck.started 
-        ? (gameStartCheck.message || 'Game started!') 
+      message: gameStartCheck.canStart 
+        ? 'Successfully joined room. Game can be started!' 
         : 'Successfully joined room',
       roomId,
       userId,
-      gameStarted: gameStartCheck.started,
-      waitingMessage: gameStartCheck.message || 'Waiting for more players'
+      gameStarted: false, // Always false since we're not auto-starting
+      waitingMessage: gameStartCheck.canStart 
+        ? 'Game can be started!' 
+        : gameStartCheck.reason || 'Waiting for more players'
     };
   }
 
   // Auto-start game when required players are reached
-  private async checkAndStartGame(roomId: string): Promise<{ started: boolean; message?: string }> {
-    const room = await this.findOne(roomId);
+  // private async checkAndStartGame(roomId: string): Promise<{ started: boolean; message?: string }> {
+  //   const room = await this.findOne(roomId);
     
-    // Only check if room is in waiting status
-    if (room.status !== 'waiting') {
-      return { started: false };
-    }
+  //   // Only check if room is in waiting status
+  //   if (room.status !== 'waiting') {
+  //     return { started: false };
+  //   }
 
-    const currentParticipants = await this.redisService.getRoomParticipants(roomId);
-    const currentCount = currentParticipants.length;
-    const requiredCount = room.requiredPlayers;
+  //   const currentParticipants = await this.redisService.getRoomParticipants(roomId);
+  //   const currentCount = currentParticipants.length;
+  //   const requiredCount = room.requiredPlayers;
 
-    if (currentCount >= requiredCount) {
-      // Start the game
-      await this.startGame(roomId);
-      return { 
-        started: true, 
-        message: `Game started! ${currentCount} players joined.` 
-      };
-    }
+  //   if (currentCount >= requiredCount) {
+  //     // Start the game
+  //     await this.startGame(roomId);
+  //     return { 
+  //       started: true, 
+  //       message: `Game started! ${currentCount} players joined.` 
+  //     };
+  //   }
 
-    return { 
-      started: false, 
-      message: `Waiting for ${requiredCount - currentCount} more players to start.` 
-    };
-  }
+  //   return { 
+  //     started: false, 
+  //     message: `Waiting for ${requiredCount - currentCount} more players to start.` 
+  //   };
+  // }
 
   // Start the game
-  private async startGame(roomId: string): Promise<void> {
+  async startGame(roomId: string): Promise<void> {
+    const canStart = await this.canStartGame(roomId);
+    if (!canStart.canStart) {
+      throw new ConflictException(canStart.reason);
+    }
+
     // Update room status to in_progress
     await this.roomRepository.update(roomId, { status: 'in_progress' });
     
-    // Here you can add additional game initialization logic:
-    // - Assign roles to players
-    // - Set up game state
-    // - Initialize game phases
-    // - Send notifications to all players
+    // Get room participants in order
+    const participants = await this.redisService.getRoomParticipants(roomId);
     
-    console.log(`Game started in room ${roomId}`);
+    // Get user details maintaining the same order
+    const userDetails = await this.getUserDetails(participants);
+    
+    // Extract arrays in the same order
+    const playerIds = userDetails.map(user => user.userId);
+    const playerNicknames = userDetails.map(user => user.nickname);
+    
+    // Initialize the game using GameLogicService
+    await this.gameLogicService.initializeGame(roomId, playerIds, playerNicknames);
+    
+    console.log(`Game started in room ${roomId} with ${participants.length} players`);
   }
 
   async leaveRoom(roomId: string, userId: string): Promise<{ message: string; roomId: string; userId: string; roomDeleted?: boolean }> {
@@ -375,5 +396,49 @@ export class RoomService {
     
     return waitingRooms.map(room => this.mapToResponseDto(room));
   }
+
+  private async getUserDetails(userIds: string[]): Promise<Array<{ userId: string; nickname: string }>> {
+    const userDetails: Array<{ userId: string; nickname: string }> = [];
+    
+    // Process in the same order as the userIds array
+    for (const userId of userIds) {
+      try {
+        const user = await this.usersService.findById(userId);
+        if (user) {
+          userDetails.push({
+            userId: user.userId,
+            nickname: user.nickname
+          });
+        }
+      } catch (error) {
+        console.error(`Failed to get user details for userId: ${userId}`, error);
+      }
+    }
+    
+    return userDetails;
+  }
+
+  // async startGameManually(roomId: string): Promise<{ message: string; success: boolean }> {
+  //   const room = await this.findOne(roomId);
+    
+  //   // Check if user is the host
+  //   if (!room.hostUser) {
+  //     throw new BadRequestException('Room has no host');
+  //   }
+    
+  //   // Check if game can be started
+  //   const canStart = await this.canStartGame(roomId);
+  //   if (!canStart.canStart) {
+  //     throw new BadRequestException(canStart.reason || 'Game cannot be started');
+  //   }
+    
+  //   // Call the private startGame method
+  //   await this.startGame(roomId);
+    
+  //   return {
+  //     message: 'Game started successfully!',
+  //     success: true
+  //   };
+  // }
 
 }
