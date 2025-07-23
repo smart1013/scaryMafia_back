@@ -91,25 +91,35 @@ export class GameLogicService {
   /**
    * Transition from night to night_result (process night actions)
    */
-  async transitionToNightResult(roomId: string): Promise<GameState> {
+  async transitionToNightResult(roomId: string): Promise<GameState & { nightResult?: { eliminatedPlayer?: { userId: string; nickname: string; role: string }; wasProtected: boolean; mafiaTarget?: string; doctorTarget?: string } }> {
     const gameState = await this.getGameState(roomId);
     if (!gameState) throw new Error('Game state not found');
 
     // Get night actions from Redis
     const nightActions = await this.redisService.getAllNightActions(roomId, gameState.dayNumber);
     
+    let eliminatedPlayer: { userId: string; nickname: string; role: string } | undefined = undefined;
+    let wasProtected = false;
+    let mafiaTarget: string | undefined = undefined;
+    let doctorTarget: string | undefined = undefined;
+    
     // Process mafia kill
     if (nightActions['mafia_target']) {
-      const mafiaTarget = nightActions['mafia_target'];
+      mafiaTarget = nightActions['mafia_target'];
       const targetPlayer = gameState.players.find(p => p.userId === mafiaTarget);
       
       // Check if doctor protected the target
-      const doctorTarget = nightActions['doctor_target'];
-      const wasProtected = doctorTarget === mafiaTarget;
+      doctorTarget = nightActions['doctor_target'];
+      wasProtected = doctorTarget === mafiaTarget;
       
       if (targetPlayer && targetPlayer.isAlive && !wasProtected) {
         targetPlayer.isAlive = false;
         gameState.eliminatedPlayers.push(targetPlayer.userId);
+        eliminatedPlayer = {
+          userId: targetPlayer.userId,
+          nickname: targetPlayer.nickname,
+          role: targetPlayer.role
+        };
         this.logger.log(`Mafia killed ${targetPlayer.nickname}`);
       } else if (wasProtected) {
         this.logger.log(`Doctor protected ${targetPlayer?.nickname} from mafia attack`);
@@ -138,7 +148,16 @@ export class GameLogicService {
     // Clear night actions after processing
     await this.redisService.clearNightActions(roomId, gameState.dayNumber);
     
-    return gameState;
+    // Return game state with night result information
+    return {
+      ...gameState,
+      nightResult: {
+        eliminatedPlayer,
+        wasProtected,
+        mafiaTarget,
+        doctorTarget
+      }
+    } as GameState & { nightResult?: { eliminatedPlayer?: { userId: string; nickname: string; role: string }; wasProtected: boolean; mafiaTarget?: string; doctorTarget?: string } };
   }
 
   /**

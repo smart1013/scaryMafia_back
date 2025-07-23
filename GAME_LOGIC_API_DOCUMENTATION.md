@@ -381,7 +381,7 @@ Process night actions and transition to night result phase.
 **Path Parameters**:
 - `roomId` (string): The ID of the room
 
-**Response (200)**:
+**Response (200) - Player Eliminated**:
 ```json
 {
   "roomId": "456e7890-e89b-12d3-a456-426614174000",
@@ -393,7 +393,59 @@ Process night actions and transition to night result phase.
   "nightActions": {
     "mafiaTarget": "789e0123-e89b-12d3-a456-426614174000"
   },
-  "settings": {}
+  "settings": {},
+  "nightResult": {
+    "eliminatedPlayer": {
+      "userId": "789e0123-e89b-12d3-a456-426614174000",
+      "nickname": "player2",
+      "role": "citizen"
+    },
+    "wasProtected": false,
+    "mafiaTarget": "789e0123-e89b-12d3-a456-426614174000",
+    "doctorTarget": "abc12345-e89b-12d3-a456-426614174000"
+  }
+}
+```
+
+**Response (200) - Player Protected**:
+```json
+{
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "phase": "night_result",
+  "dayNumber": 1,
+  "players": [...],
+  "eliminatedPlayers": [],
+  "voteResults": {},
+  "nightActions": {
+    "mafiaTarget": "789e0123-e89b-12d3-a456-426614174000"
+  },
+  "settings": {},
+  "nightResult": {
+    "eliminatedPlayer": undefined,
+    "wasProtected": true,
+    "mafiaTarget": "789e0123-e89b-12d3-a456-426614174000",
+    "doctorTarget": "789e0123-e89b-12d3-a456-426614174000"
+  }
+}
+```
+
+**Response (200) - No Mafia Action**:
+```json
+{
+  "roomId": "456e7890-e89b-12d3-a456-426614174000",
+  "phase": "night_result",
+  "dayNumber": 1,
+  "players": [...],
+  "eliminatedPlayers": [],
+  "voteResults": {},
+  "nightActions": {},
+  "settings": {},
+  "nightResult": {
+    "eliminatedPlayer": undefined,
+    "wasProtected": false,
+    "mafiaTarget": undefined,
+    "doctorTarget": undefined
+  }
 }
 ```
 
