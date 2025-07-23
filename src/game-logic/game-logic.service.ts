@@ -146,7 +146,7 @@ export class GameLogicService {
     await this.checkWinConditions(roomId);
     
     // Clear night actions after processing
-    await this.redisService.clearNightActions(roomId, gameState.dayNumber);
+    // await this.redisService.clearNightActions(roomId, gameState.dayNumber);
     
     // Return game state with night result information
     return {
@@ -171,6 +171,7 @@ export class GameLogicService {
     gameState.dayNumber += 1;
 
     await this.updateGameState(roomId, gameState);
+    await this.redisService.clearNightActions(roomId, gameState.dayNumber);
     return gameState;
   }
 
